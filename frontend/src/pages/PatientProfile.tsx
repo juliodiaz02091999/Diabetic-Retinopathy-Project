@@ -1,43 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { supabasePatientAPI, supabasePredictionAPI } from '@/lib/supabaseApi';
-import { 
-  User, 
-  UserPlus, 
-  Calendar,
-  Download,
-  AlertCircle,
-  CheckCircle,
-  Loader2,
-  ArrowLeft,
-  Eye,
-  TrendingUp,
-  Activity,
-  FileText,
-  Clock,
-  BarChart3
+import {
+  User, UserPlus, Calendar, Download, AlertCircle, CheckCircle,
+  Loader2, ArrowLeft, Eye, Activity, FileText, Clock, BarChart3, TrendingUp
 } from 'lucide-react';
 
-interface Patient {
-  name: string;
-  age: number;
-  gender: string;
-  contact: string;
-}
-
+interface Patient { name: string; age: number; gender: string; contact: string; }
 interface Prediction {
-  patient_name: string;
-  patient_id: number;
-  prediction_class: string;
-  confidence_score: number;
-  prediction_date: string;
+  patient_name: string; patient_id: number; prediction_class: string;
+  confidence_score: number; prediction_date: string;
 }
 
 const PatientProfile = () => {
@@ -48,25 +23,15 @@ const PatientProfile = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    age: '',
-    gender: 'Male',
-    contact_info: '',
-  });
+  const [formData, setFormData] = useState({ name: '', age: '', gender: 'Male', contact_info: '' });
 
-  useEffect(() => {
-    loadPatientData();
-  }, []);
+  useEffect(() => { loadPatientData(); }, []);
 
   const loadPatientData = async () => {
     setLoading(true);
     try {
-      // Load patient info
       const patientData = await supabasePatientAPI.getMyPatient();
       setPatient(patientData);
-      
-      // Load predictions if patient exists
       if (patientData) {
         const predictionsData = await supabasePredictionAPI.getAll();
         setPredictions(predictionsData);
@@ -81,7 +46,6 @@ const PatientProfile = () => {
   const handleSavePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
     try {
       await supabasePatientAPI.create({
         name: formData.name,
@@ -89,7 +53,6 @@ const PatientProfile = () => {
         gender: formData.gender,
         contact_info: formData.contact_info,
       });
-      
       await loadPatientData();
       setShowAddForm(false);
       setFormData({ name: '', age: '', gender: 'Male', contact_info: '' });
@@ -100,316 +63,229 @@ const PatientProfile = () => {
     }
   };
 
-  const handleDownloadReport = async () => {
-    try {
-      // TODO: Implementar descarga de reporte con Supabase
-      // Por ahora, mostrar mensaje de funcionalidad en desarrollo
-      alert('Report download feature is under development');
-    } catch (error) {
-      console.error('Failed to download report:', error);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 flex items-center justify-center">
+      <div className="page flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
-            <Loader2 className="h-8 w-8 text-white animate-spin" />
+          <div className="w-12 h-12 rounded-2xl surface flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="h-6 w-6 text-foreground animate-spin" />
           </div>
-          <p className="text-slate-600 font-medium text-lg">Loading patient data...</p>
+          <p className="text-sm text-muted-foreground">Loading patient data...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
-      <div className="max-w-6xl mx-auto p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Button 
-            onClick={() => navigate('/dashboard')}
-            variant="ghost" 
-            className="mb-6 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-2xl font-medium"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Button>
-          
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-3xl flex items-center justify-center shadow-2xl">
-              <User className="h-8 w-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Patient Profile</h1>
-              <p className="text-slate-600 text-lg font-medium">Manage patient information and view prediction history</p>
+    <div className="page">
+      {/* Subtle top glow – dark only */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[200px] opacity-0 dark:opacity-100 bg-blue-600/[0.04] rounded-full blur-[120px] pointer-events-none transition-opacity duration-500" />
+
+      <div className="max-w-5xl mx-auto px-8 py-8 relative z-10">
+        {/* Header row */}
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5 group"
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+              Back to Dashboard
+            </button>
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-2xl surface flex items-center justify-center">
+                <User className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground tracking-tight">Patient Profile</h1>
+                <p className="text-sm text-muted-foreground">Manage patient information and prediction history</p>
+              </div>
             </div>
           </div>
+          <ThemeToggle />
         </div>
 
-        {/* Patient Info */}
         {patient ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            {/* Patient Details Card */}
-            <div className="lg:col-span-2">
-              <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-xl">
-                <CardHeader className="pb-6">
-                  <CardTitle className="flex items-center text-2xl font-bold text-slate-900">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-2xl flex items-center justify-center mr-4">
-                      <User className="h-5 w-5 text-blue-600" />
-                    </div>
-                    Patient Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Name</label>
-                      <p className="text-2xl font-bold text-slate-900">{patient.name}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Age</label>
-                      <p className="text-2xl font-bold text-slate-900">{patient.age} years</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Gender</label>
-                      <p className="text-2xl font-bold text-slate-900">{patient.gender}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Contact</label>
-                      <p className="text-2xl font-bold text-slate-900">{patient.contact}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="space-y-6">
-              <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
-                <CardContent className="p-6">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Activity className="h-6 w-6" />
-                    </div>
-                    <div className="text-3xl font-bold mb-2">{predictions.length}</div>
-                    <div className="text-blue-100 font-medium">Total Predictions</div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
-                <CardContent className="p-6">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <TrendingUp className="h-6 w-6" />
-                    </div>
-                    <div className="text-3xl font-bold mb-2">
-                      {predictions.length > 0 ? Math.round(predictions.reduce((acc, p) => acc + p.confidence_score, 0) / predictions.length) : 0}%
-                    </div>
-                    <div className="text-emerald-100 font-medium">Avg Confidence</div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        ) : (
-          <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-xl mb-8">
-            <CardHeader className="pb-6">
-              <CardTitle className="flex items-center text-2xl font-bold text-slate-900">
-                <div className="w-10 h-10 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl flex items-center justify-center mr-4">
-                  <AlertCircle className="h-5 w-5 text-amber-500" />
+          <>
+            {/* Patient details + stats */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+              <div className="lg:col-span-2 surface-lift p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold text-foreground">Patient Information</p>
                 </div>
-                No Patient Profile
-              </CardTitle>
-              <CardDescription className="text-slate-600 font-medium text-lg">
-                Create a patient profile to save and track predictions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!showAddForm ? (
-                <Button 
-                  onClick={() => setShowAddForm(true)}
-                  className="h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl active:translate-y-[2px] transition-all duration-200"
-                >
-                  <UserPlus className="h-5 w-5 mr-3" />
-                  Add Patient Profile
-                </Button>
-              ) : (
-                <form onSubmit={handleSavePatient} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="name" className="text-sm font-semibold text-slate-700">Name *</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Patient name"
-                        required
-                        className="h-12 rounded-2xl border-slate-200/50 bg-white/50 backdrop-blur-sm text-slate-900 placeholder:text-slate-400 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="age" className="text-sm font-semibold text-slate-700">Age *</Label>
-                      <Input
-                        id="age"
-                        type="number"
-                        value={formData.age}
-                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                        placeholder="Age"
-                        required
-                        className="h-12 rounded-2xl border-slate-200/50 bg-white/50 backdrop-blur-sm text-slate-900 placeholder:text-slate-400 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="gender" className="text-sm font-semibold text-slate-700">Gender</Label>
-                      <Select 
-                        value={formData.gender} 
-                        onValueChange={(value) => setFormData({ ...formData, gender: value })}
-                      >
-                        <SelectTrigger className="h-12 rounded-2xl border-slate-200/50 bg-white/50 backdrop-blur-sm text-slate-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200">
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="contact" className="text-sm font-semibold text-slate-700">Contact Info</Label>
-                      <Input
-                        id="contact"
-                        value={formData.contact_info}
-                        onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
-                        placeholder="Phone or email"
-                        className="h-12 rounded-2xl border-slate-200/50 bg-white/50 backdrop-blur-sm text-slate-900 placeholder:text-slate-400 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex space-x-4">
-                    <Button 
-                      type="submit" 
-                      disabled={saving}
-                      className="h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl active:translate-y-[2px] transition-all duration-200"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="mr-3 h-5 w-5" />
-                          Save Patient
-                        </>
-                      )}
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setShowAddForm(false)}
-                      className="h-12 rounded-2xl font-bold text-lg border-slate-200/50 hover:bg-slate-50 transition-all duration-200"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Predictions History */}
-        {patient && (
-          <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-xl">
-            <CardHeader className="pb-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-2xl flex items-center justify-center mr-4">
-                    <Calendar className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-2xl font-bold text-slate-900">Prediction History</CardTitle>
-                    <CardDescription className="text-slate-600 font-medium text-lg">
-                      {predictions.length} prediction(s) recorded
-                    </CardDescription>
-                  </div>
-                </div>
-                {predictions.length > 0 && (
-                  <Button 
-                    onClick={handleDownloadReport} 
-                    variant="outline"
-                    className="h-12 rounded-2xl font-bold text-lg border-slate-200/50 hover:bg-slate-50 transition-all duration-200"
-                  >
-                    <Download className="h-5 w-5 mr-3" />
-                    Download Report
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {predictions.length > 0 ? (
-                <div className="space-y-4">
-                  {predictions.map((prediction, index) => (
-                    <div
-                      key={index}
-                      className="bg-white/60 backdrop-blur-sm border border-slate-200/50 rounded-2xl p-6 flex justify-between items-center hover:shadow-lg transition-all duration-300 group"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                          prediction.prediction_class === 'DR' 
-                            ? 'bg-red-100 text-red-600' 
-                            : 'bg-emerald-100 text-emerald-600'
-                        }`}>
-                          <Eye className="h-6 w-6" />
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-3 mb-2">
-                            <Badge 
-                              variant={prediction.prediction_class === 'DR' ? 'destructive' : 'default'}
-                              className="font-bold text-sm px-3 py-1"
-                            >
-                              {prediction.prediction_class === 'DR' ? 'DR Detected' : 'No DR'}
-                            </Badge>
-                            <div className="flex items-center text-slate-500 text-sm">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {new Date(prediction.prediction_date).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <p className="text-slate-600 font-medium">
-                            Confidence: <span className="font-bold text-slate-900">{prediction.confidence_score.toFixed(1)}%</span>
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-slate-900">
-                            {prediction.confidence_score.toFixed(1)}%
-                          </div>
-                          <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Confidence</div>
-                        </div>
-                        <BarChart3 className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
-                      </div>
+                <div className="grid grid-cols-2 gap-5">
+                  {[
+                    { label: 'Name', value: patient.name },
+                    { label: 'Age', value: `${patient.age} years` },
+                    { label: 'Gender', value: patient.gender },
+                    { label: 'Contact', value: patient.contact },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
+                      <p className="field-label mb-1">{label}</p>
+                      <p className="text-lg font-semibold text-foreground">{value}</p>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-16">
-                  <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
-                    <FileText className="h-10 w-10 text-slate-500" />
+              </div>
+
+              <div className="space-y-4">
+                <div className="surface p-5 text-center">
+                  <div className="w-10 h-10 rounded-xl mx-auto mb-3 flex items-center justify-center
+                    bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20">
+                    <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <p className="text-slate-600 font-medium text-lg mb-2">
-                    No predictions recorded yet
+                  <p className="text-3xl font-bold text-foreground mb-0.5">{predictions.length}</p>
+                  <p className="text-xs text-muted-foreground font-medium">Total Predictions</p>
+                </div>
+                <div className="surface p-5 text-center">
+                  <div className="w-10 h-10 rounded-xl mx-auto mb-3 flex items-center justify-center
+                    bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20">
+                    <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <p className="text-3xl font-bold text-foreground mb-0.5">
+                    {predictions.length > 0
+                      ? Math.round(predictions.reduce((acc, p) => acc + p.confidence_score, 0) / predictions.length)
+                      : 0}%
                   </p>
-                  <p className="text-slate-500 text-sm">
-                    Start analyzing images to build prediction history
-                  </p>
+                  <p className="text-xs text-muted-foreground font-medium">Avg Confidence</p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* No patient */
+          <div className="surface p-6 mb-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center
+                bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">No Patient Profile</p>
+                <p className="text-xs text-muted-foreground">Create a profile to save and track predictions</p>
+              </div>
+            </div>
+
+            {!showAddForm ? (
+              <button onClick={() => setShowAddForm(true)} className="btn-primary h-9 px-4">
+                <UserPlus className="h-4 w-4" />
+                Add Patient Profile
+              </button>
+            ) : (
+              <form onSubmit={handleSavePatient} className="space-y-4 mt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="field-label">Name *</label>
+                    <input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Patient name" required className="field-input" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="field-label">Age *</label>
+                    <input type="number" value={formData.age} onChange={(e) => setFormData({ ...formData, age: e.target.value })} placeholder="Age" required className="field-input" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="field-label">Gender</label>
+                    <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+                      <SelectTrigger className="field-input h-10">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border text-foreground">
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="field-label">Contact Info</label>
+                    <input value={formData.contact_info} onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })} placeholder="Phone or email" className="field-input" />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button type="submit" disabled={saving} className="btn-primary h-9 px-4">
+                    {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <><CheckCircle className="h-4 w-4" />Save Patient</>}
+                  </button>
+                  <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary h-9 px-4">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Prediction History */}
+        {patient && (
+          <div className="surface overflow-hidden">
+            <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg surface flex items-center justify-center">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Prediction History</p>
+                  <p className="text-xs text-muted-foreground">{predictions.length} prediction(s) recorded</p>
+                </div>
+              </div>
+              {predictions.length > 0 && (
+                <button onClick={() => alert('Report download feature is under development')} className="btn-secondary h-8 px-3 text-xs">
+                  <Download className="h-3.5 w-3.5" />
+                  Download Report
+                </button>
+              )}
+            </div>
+
+            <div className="p-4">
+              {predictions.length > 0 ? (
+                <div className="space-y-3">
+                  {predictions.map((prediction, index) => {
+                    const isDR = prediction.prediction_class === 'DR';
+                    return (
+                      <div key={index} className="flex items-center justify-between px-4 py-4 rounded-xl surface-lift cursor-default group">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                            isDR
+                              ? 'bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-500/20'
+                              : 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'
+                          }`}>
+                            <Eye className={`h-4 w-4 ${isDR ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={isDR ? 'badge-dr' : 'badge-no-dr'}>
+                                {isDR ? 'DR Detected' : 'No DR'}
+                              </span>
+                              <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                                <Clock className="h-3 w-3" />
+                                {new Date(prediction.prediction_date).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Confidence: <span className="text-foreground font-semibold">{prediction.confidence_score.toFixed(1)}%</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">{prediction.confidence_score.toFixed(1)}%</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Confidence</p>
+                          </div>
+                          <BarChart3 className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-14">
+                  <div className="w-14 h-14 rounded-2xl surface flex items-center justify-center mx-auto mb-4">
+                    <FileText className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">No predictions recorded yet</p>
+                  <p className="text-xs text-muted-foreground/60">Start analyzing images to build prediction history</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
       </div>
     </div>

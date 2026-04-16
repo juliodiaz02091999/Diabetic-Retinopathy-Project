@@ -23,6 +23,10 @@ module.exports = {
   			ring: 'hsl(var(--ring))',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
+        brand: {
+          DEFAULT: 'hsl(var(--brand))',
+          foreground: 'hsl(var(--brand-foreground))'
+        },
   			primary: {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
@@ -64,6 +68,17 @@ module.exports = {
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
+      boxShadow: {
+        // Token-driven – values set in :root and .dark
+        'nm':     'var(--shadow-nm)',
+        'nm-sm':  'var(--shadow-nm-sm)',
+        'nm-in':  'var(--shadow-nm-in)',
+        'elev-xs':'var(--shadow-xs, none)',
+        'elev-sm':'var(--shadow-sm, none)',
+        'elev-md':'var(--shadow-md, none)',
+        'elev-lg':'var(--shadow-lg, none)',
+        'elev-btn':'var(--shadow-btn, none)',
+      },
   		keyframes: {
   			'accordion-down': {
   				from: {

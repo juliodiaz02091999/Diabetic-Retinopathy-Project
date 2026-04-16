@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -39,18 +40,18 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center max-w-md mx-auto p-6">
-            <div className="text-red-500 text-6xl mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Algo salió mal</h1>
-            <p className="text-gray-600 mb-6">
-              Ha ocurrido un error inesperado. Por favor, recarga la página.
-            </p>
+        <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b]">
+          <div className="text-center max-w-sm mx-auto p-6">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+              <span className="text-red-400 text-xl">!</span>
+            </div>
+            <h1 className="text-lg font-semibold text-white mb-2">Something went wrong</h1>
+            <p className="text-sm text-zinc-500 mb-5">An unexpected error occurred. Please reload the page.</p>
             <button
               onClick={() => window.location.reload()}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="h-9 px-4 rounded-xl bg-white text-zinc-950 text-sm font-semibold hover:bg-zinc-100 transition-all"
             >
-              Recargar página
+              Reload
             </button>
           </div>
         </div>
@@ -69,11 +70,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
-          <p className="text-sm text-gray-500 mt-2">Estado: {isLoading ? 'Cargando' : 'Completado'}</p>
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-zinc-500">Loading...</p>
         </div>
       </div>
     );
@@ -96,11 +96,10 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
-          <p className="text-sm text-gray-500 mt-2">Estado: {isLoading ? 'Cargando' : 'Completado'}</p>
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-zinc-500">Loading...</p>
         </div>
       </div>
     );
@@ -157,17 +156,19 @@ function AppRoutes() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <div className="App">
-            <ErrorBoundary>
-              <AppRoutes />
-            </ErrorBoundary>
-          </div>
-        </Router>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router>
+            <div className="App">
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </div>
+          </Router>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
