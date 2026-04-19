@@ -12,6 +12,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# API ML en compose: pasar --build-arg VITE_API_URL=http://localhost:8000 (ver docker-compose)
+ARG VITE_API_URL=
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build the application
 RUN npm run build
 

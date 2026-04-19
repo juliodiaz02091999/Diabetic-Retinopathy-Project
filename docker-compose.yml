@@ -2,17 +2,28 @@ version: '3.8'
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        # Misma ruta que en GitHub: .../main/backend/model-folder/64x3-CNN.model/...
+        CNN_RAW_BASE: https://raw.githubusercontent.com/juliodiaz02091999/Diabetic-Retinopathy-Project/main/backend/model-folder/64x3-CNN.model
     ports:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app
     volumes:
       - backend_data:/app/data
+      # No montar ./backend/model-folder vacío: taparía el SavedModel ya metido en la imagen al hacer build.
+      # Solo descomenta si poblaste backend/model-folder localmente (p. ej. git lfs pull):
+      # - ./backend/model-folder:/app/model-folder:ro
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # El navegador llama al backend en el host (no al contenedor nginx)
+        VITE_API_URL: http://localhost:8000
     ports:
       - "80:80"
     depends_on:

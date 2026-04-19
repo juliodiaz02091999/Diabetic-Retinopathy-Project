@@ -25,26 +25,33 @@ export function getMlErrorDetail(error: unknown): string {
   return error.message;
 }
 
+/** Reintentar: modelo en carga en esta instancia, o 503 sin cuerpo (otra instancia fría / proxy). */
 function isMlWarmup503(error: unknown): boolean {
   if (!isAxiosError(error) || error.response?.status !== 503) return false;
-  const d = (error.response?.data as { detail?: string } | undefined)?.detail;
+  const data = error.response?.data;
+  if (data == null || typeof data !== 'object') return true;
+  const d = (data as { detail?: unknown }).detail;
+  if (d === undefined || d === '') return true;
   if (typeof d !== 'string') return false;
   const lower = d.toLowerCase();
+  if (lower.includes('failed to load')) return false;
   return lower.includes('still loading') || lower.includes('retry shortly');
 }
 
-// Create axios instance for ML backend
+// Cloud Run puede mandar cada request a otra instancia (cada una carga TF/PyTorch al arrancar).
+const ML_WARMUP_MAX_ATTEMPTS = 36;
+const ML_WARMUP_DELAY_MS = 5000;
+
+// Sin Content-Type por defecto: application/json rompe FormData; multipart manual omite boundary.
 export const mlApi = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
-// Add auth token to requests (token de Supabase)
 mlApi.interceptors.request.use(
   async (config) => {
-    // Obtener token de sesión de Supabase
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     try {
       const { data: { session } } = await import('@/lib/supabase').then(m => m.supabase.auth.getSession());
       if (session?.access_token) {
@@ -55,9 +62,7 @@ mlApi.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Handle auth errors
@@ -77,25 +82,19 @@ export const predictionAPI = {
   predictRETFound: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return mlApi.post('/predict/retfound', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return mlApi.post('/predict/retfound', formData);
   },
 
-  /** Reintenta mientras el backend devuelve 503 por modelo en frío (carga en CPU). */
+  /** Reintenta ante 503 (instancia fría o modelo aún cargando en CPU). */
   predictRETFoundWithWarmup: async (file: File) => {
-    const maxAttempts = 12;
-    const delayMs = 5000;
     let lastError: unknown;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < ML_WARMUP_MAX_ATTEMPTS; attempt++) {
       try {
         return await predictionAPI.predictRETFound(file);
       } catch (e) {
         lastError = e;
-        if (!isMlWarmup503(e) || attempt === maxAttempts - 1) throw e;
-        await sleep(delayMs);
+        if (!isMlWarmup503(e) || attempt === ML_WARMUP_MAX_ATTEMPTS - 1) throw e;
+        await sleep(ML_WARMUP_DELAY_MS);
       }
     }
     throw lastError;
@@ -104,24 +103,18 @@ export const predictionAPI = {
   predictCNN: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return mlApi.post('/predict/cnn', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return mlApi.post('/predict/cnn', formData);
   },
 
   predictCNNWithWarmup: async (file: File) => {
-    const maxAttempts = 12;
-    const delayMs = 5000;
     let lastError: unknown;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < ML_WARMUP_MAX_ATTEMPTS; attempt++) {
       try {
         return await predictionAPI.predictCNN(file);
       } catch (e) {
         lastError = e;
-        if (!isMlWarmup503(e) || attempt === maxAttempts - 1) throw e;
-        await sleep(delayMs);
+        if (!isMlWarmup503(e) || attempt === ML_WARMUP_MAX_ATTEMPTS - 1) throw e;
+        await sleep(ML_WARMUP_DELAY_MS);
       }
     }
     throw lastError;
@@ -130,12 +123,7 @@ export const predictionAPI = {
   preprocessPreview: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return mlApi.post('/preprocess/preview', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      responseType: 'blob',
-    });
+    return mlApi.post('/preprocess/preview', formData, { responseType: 'blob' });
   },
 };
 

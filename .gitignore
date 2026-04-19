@@ -187,7 +187,7 @@ build/
 
 # Dataset and large files
 diabetic_retinopathy_dataset/
-model-folder/
+# model-folder/64x3-CNN: versionar con Git LFS (ver backend/.gitattributes), no ignorar.
 mlvenv/
 medical_data.db
 *.h5

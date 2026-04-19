@@ -19,6 +19,11 @@ fi
 echo "📁 Creating directories..."
 mkdir -p backend/diabetic_retinopathy_dataset
 
+if [[ ! -f backend/model-folder/64x3-CNN.model/saved_model.pb ]]; then
+    echo "⚠️  Falta el SavedModel 64x3-CNN en backend/model-folder/."
+    echo "    git lfs pull (si está en el repo con LFS) o docker build, que descarga según el Dockerfile."
+fi
+
 # Build and start services
 echo "🐳 Building and starting services..."
 if command -v docker-compose &> /dev/null; then

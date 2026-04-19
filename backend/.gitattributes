@@ -1,0 +1,4 @@
+# TORTUOSITY-style: LFS en el repo; en docker build el Dockerfile hace curl a
+# raw.githubusercontent.com/TU_USUARIO/TU_REPO/.../model-folder/64x3-CNN.model/
+# (ajusta ARG CNN_RAW_BASE en backend/Dockerfile o docker-compose build.args).
+model-folder/64x3-CNN.model/** filter=lfs diff=lfs merge=lfs -text
