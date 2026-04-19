@@ -7,8 +7,10 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   Eye, Upload, FileText, AlertTriangle, CheckCircle, Loader2,
   LogOut, UserPlus, Info, Zap, Target, Microscope,
-  Activity, TrendingUp, Sparkles, Shield, X
+  Activity, TrendingUp, Sparkles, Shield, X, Brain
 } from 'lucide-react';
+
+type ModelType = 'retfound' | 'cnn';
 
 interface RETFoundPredictionResult {
   confidence_score: number;
@@ -28,25 +30,61 @@ interface RETFoundPredictionResult {
   checkpoint_loaded: boolean;
 }
 
+interface CNNPredictionResult {
+  confidence_score: number;
+  prediction_class: string;
+  diagnosis: string;
+  probabilities: Record<string, number>;
+  clinical_recommendation: string;
+  model_used: string;
+  model_loaded: boolean;
+}
+
+type PredictionResult = RETFoundPredictionResult | CNNPredictionResult;
+
+const MODELS: { id: ModelType; label: string; sublabel: string; icon: React.ElementType; pill: string }[] = [
+  { id: 'retfound', label: 'RETFound', sublabel: 'Foundation model · Nature 2023', icon: Sparkles, pill: 'RETFound · Quantized' },
+  { id: 'cnn',      label: '64x3-CNN',  sublabel: 'Cyber-Aju CNN · >93% accuracy',  icon: Brain,    pill: '64x3-CNN · SavedModel' },
+];
+
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [selectedModel, setSelectedModel] = useState<ModelType>('retfound');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [prediction, setPrediction] = useState<RETFoundPredictionResult | null>(null);
+  const [preprocessedPreview, setPreprocessedPreview] = useState<string | null>(null);
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false);
+  const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchPreprocessedPreview = async (file: File) => {
+    setIsFetchingPreview(true);
+    setPreprocessedPreview(null);
+    try {
+      const response = await predictionAPI.preprocessPreview(file);
+      const url = URL.createObjectURL(response.data);
+      setPreprocessedPreview(url);
+    } catch {
+      setPreprocessedPreview(null);
+    } finally {
+      setIsFetchingPreview(false);
+    }
+  };
 
   const processFile = (file: File) => {
     if (!file.type.startsWith('image/')) { alert('Please select an image file'); return; }
     setSelectedFile(file);
     setPrediction(null);
     setSaveMessage(null);
+    setPreprocessedPreview(null);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(file);
+    if (selectedModel === 'cnn') fetchPreprocessedPreview(file);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,7 +96,9 @@ const Dashboard = () => {
     if (!selectedFile) return;
     setIsAnalyzing(true);
     try {
-      const response = await predictionAPI.predictRETFound(selectedFile);
+      const response = selectedModel === 'cnn'
+        ? await predictionAPI.predictCNN(selectedFile)
+        : await predictionAPI.predictRETFound(selectedFile);
       setPrediction(response.data);
       try {
         await supabasePredictionAPI.save({
@@ -76,8 +116,13 @@ const Dashboard = () => {
     }
   };
 
-  const isRETFound = (p: any): p is RETFoundPredictionResult => p !== null && 'detailed_class' in p;
+  const isRETFound = (p: PredictionResult | null): p is RETFoundPredictionResult =>
+    p !== null && 'detailed_class' in p;
+  const isCNN = (p: PredictionResult | null): p is CNNPredictionResult =>
+    p !== null && 'model_loaded' in p;
   const isDR = prediction?.prediction_class === 'DR';
+
+  const activeModel = MODELS.find(m => m.id === selectedModel)!;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -166,10 +211,10 @@ const Dashboard = () => {
           {/* Stat pills */}
           <div className="flex items-center gap-3 mb-8 flex-wrap">
             {[
-              { icon: Activity, label: '98.7% Accuracy', color: 'text-blue-500 dark:text-blue-400' },
-              { icon: Sparkles, label: 'RETFound Model', color: 'text-purple-500 dark:text-purple-400' },
-              { icon: Shield, label: 'HIPAA Compliant', color: 'text-emerald-600 dark:text-emerald-400' },
-              { icon: TrendingUp, label: 'Real-time', color: 'text-orange-500 dark:text-orange-400' },
+              { icon: Activity,   label: '93%+ Accuracy',  color: 'text-blue-500 dark:text-blue-400' },
+              { icon: Sparkles,   label: '2 AI Models',    color: 'text-purple-500 dark:text-purple-400' },
+              { icon: Shield,     label: 'HIPAA Compliant',color: 'text-emerald-600 dark:text-emerald-400' },
+              { icon: TrendingUp, label: 'Real-time',       color: 'text-orange-500 dark:text-orange-400' },
             ].map(({ icon: Icon, label, color }) => (
               <div key={label} className="pill transition-all duration-200 hover:shadow-elev-sm hover:-translate-y-px">
                 <Icon className={`h-3 w-3 ${color}`} />
@@ -180,18 +225,51 @@ const Dashboard = () => {
 
           {/* Upload card */}
           <div className="surface-lift overflow-hidden">
-            {/* Card header */}
-            <div className="px-6 py-5 border-b border-border flex items-center gap-4">
-              <div className="w-9 h-9 rounded-xl surface flex items-center justify-center shrink-0">
-                <Upload className="h-4 w-4 text-foreground" />
+            {/* Model selector tabs */}
+            <div className="px-6 pt-5 pb-0 border-b border-border">
+              <div className="flex items-center gap-4 mb-0">
+                <div className="w-9 h-9 rounded-xl surface flex items-center justify-center shrink-0">
+                  <Upload className="h-4 w-4 text-foreground" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">AI Retinal Analysis</h3>
+                  <p className="text-xs text-muted-foreground">Select a model and upload a retinal image</p>
+                </div>
+                <div className="pill">
+                  <Zap className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                  {activeModel.pill}
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">RETFound AI Analysis</h3>
-                <p className="text-xs text-muted-foreground">Foundation model for diabetic retinopathy detection</p>
-              </div>
-              <div className="ml-auto pill">
-                <Zap className="h-3 w-3 text-blue-500 dark:text-blue-400" />
-                RETFound · Quantized
+
+              {/* Tabs */}
+              <div className="flex gap-1 mt-4 -mb-px">
+                {MODELS.map((m) => {
+                  const Icon = m.icon;
+                  const active = selectedModel === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedModel(m.id);
+                        setPrediction(null);
+                        setSaveMessage(null);
+                        if (m.id === 'cnn' && selectedFile) {
+                          fetchPreprocessedPreview(selectedFile);
+                        } else {
+                          setPreprocessedPreview(null);
+                        }
+                      }}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 rounded-t-lg ${
+                        active
+                          ? 'border-foreground text-foreground bg-muted/30'
+                          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {m.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -216,7 +294,26 @@ const Dashboard = () => {
               >
                 {preview ? (
                   <div className="space-y-4">
-                    <img src={preview} alt="Preview" className="max-h-56 mx-auto rounded-xl shadow-lg ring-1 ring-border" />
+                    {preprocessedPreview || isFetchingPreview ? (
+                      <div className="flex items-start justify-center gap-6">
+                        <div className="flex flex-col items-center gap-2">
+                          <img src={preview} alt="Original" className="h-44 w-44 object-cover rounded-xl shadow ring-1 ring-border" />
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Original</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                          {isFetchingPreview ? (
+                            <div className="h-44 w-44 rounded-xl surface flex items-center justify-center ring-1 ring-border">
+                              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : (
+                            <img src={preprocessedPreview!} alt="Preprocessed" className="h-44 w-44 object-cover rounded-xl shadow ring-1 ring-border" />
+                          )}
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Gaussian filtered · 224×224</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <img src={preview} alt="Preview" className="max-h-56 mx-auto rounded-xl shadow-lg ring-1 ring-border" />
+                    )}
                     <p className="text-xs text-muted-foreground font-medium">{selectedFile?.name}</p>
                   </div>
                 ) : (
@@ -243,7 +340,7 @@ const Dashboard = () => {
                 {isAnalyzing ? (
                   <><Loader2 className="h-4 w-4 animate-spin" />Analyzing with AI...</>
                 ) : (
-                  <><Zap className="h-4 w-4" />Start RETFound Analysis</>
+                  <><Zap className="h-4 w-4" />Start {activeModel.label} Analysis</>
                 )}
               </button>
             </div>
@@ -316,7 +413,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Clinical analysis */}
+              {/* RETFound: clinical analysis + stage breakdown */}
               {isRETFound(prediction) && (
                 <>
                   <div className="surface p-4">
@@ -339,7 +436,6 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  {/* Stage probabilities */}
                   <div className="surface p-4">
                     <div className="flex items-center gap-2 mb-4">
                       <Target className="h-4 w-4 text-muted-foreground" />
@@ -359,6 +455,45 @@ const Dashboard = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </>
+              )}
+
+              {/* CNN: probability bars + recommendation */}
+              {isCNN(prediction) && (
+                <>
+                  <div className="surface p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-semibold text-foreground">Class Probabilities</p>
+                    </div>
+                    <div className="space-y-3">
+                      {Object.entries(prediction.probabilities).map(([label, prob]) => {
+                        const isDRBar = label === 'DR';
+                        return (
+                          <div key={label} className="flex items-center gap-3">
+                            <p className="text-xs font-medium text-muted-foreground w-14 shrink-0">{label}</p>
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${
+                                  isDRBar ? 'bg-red-400 dark:bg-red-500' : 'bg-emerald-400 dark:bg-emerald-500'
+                                }`}
+                                style={{ width: `${prob}%` }}
+                              />
+                            </div>
+                            <p className="text-xs font-semibold text-foreground w-12 text-right">{(prob as number).toFixed(1)}%</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="surface p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Microscope className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-semibold text-foreground">Clinical Recommendation</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{prediction.clinical_recommendation}</p>
                   </div>
                 </>
               )}

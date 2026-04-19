@@ -67,6 +67,27 @@ export const predictionAPI = {
       },
     });
   },
+
+  predictCNN: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return mlApi.post('/predict/cnn', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  preprocessPreview: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return mlApi.post('/preprocess/preview', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      responseType: 'blob',
+    });
+  },
 };
 
 // Models API para información de modelos

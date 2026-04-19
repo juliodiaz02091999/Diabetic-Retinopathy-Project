@@ -26,6 +26,19 @@ RUN if [ ! -f "checkpoint-quantized-model.pth" ]; then \
     echo "Quantized model checkpoint downloaded successfully"; \
     fi
 
+# Download 64x3-CNN SavedModel from GitHub
+RUN if [ ! -f "model-folder/64x3-CNN.model/saved_model.pb" ]; then \
+    echo "Downloading 64x3-CNN.model from GitHub..." && \
+    mkdir -p model-folder/64x3-CNN.model/variables && \
+    BASE="https://raw.githubusercontent.com/Cyber-Aju/Diabetic_retinopathy/main/64x3-CNN.model" && \
+    curl -fsSL "$BASE/fingerprint.pb"    -o model-folder/64x3-CNN.model/fingerprint.pb && \
+    curl -fsSL "$BASE/keras_metadata.pb" -o model-folder/64x3-CNN.model/keras_metadata.pb && \
+    curl -fsSL "$BASE/saved_model.pb"    -o model-folder/64x3-CNN.model/saved_model.pb && \
+    curl -fsSL "$BASE/variables/variables.index" -o model-folder/64x3-CNN.model/variables/variables.index && \
+    curl -fsSL "$BASE/variables/variables.data-00000-of-00001" -o model-folder/64x3-CNN.model/variables/variables.data-00000-of-00001 && \
+    echo "64x3-CNN model downloaded successfully"; \
+    fi
+
 # Create directories
 RUN mkdir -p /app/diabetic_retinopathy_dataset
 
