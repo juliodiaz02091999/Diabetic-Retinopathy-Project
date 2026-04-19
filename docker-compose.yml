@@ -2,11 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ./backend
-      args:
-        # Misma ruta que en GitHub: .../main/backend/model-folder/64x3-CNN.model/...
-        CNN_RAW_BASE: https://raw.githubusercontent.com/juliodiaz02091999/Diabetic-Retinopathy-Project/main/backend/model-folder/64x3-CNN.model
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
