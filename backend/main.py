@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -16,10 +18,21 @@ import io
 from pydantic import BaseModel
 import tempfile
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Arrancar cargas en segundo plano *después* de que uvicorn enlace el puerto (Cloud Run probe).
+    print("[startup] Background model loaders starting…", flush=True)
+    threading.Thread(target=_load_core_models, daemon=True).start()
+    yield
+    print("[shutdown] RetinaScan API shutdown", flush=True)
+
+
 app = FastAPI(
     title="RetinaScan AI API",
     description="Advanced AI-Powered Diabetic Retinopathy Screening Platform",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -121,9 +134,6 @@ def _load_core_models():
     threading.Thread(target=_load_retfound_only, daemon=True).start()
 
 
-threading.Thread(target=_load_core_models, daemon=True).start()
-
-
 @app.get("/")
 async def root():
     return {"message": "RetinaScan AI API - Diabetic Retinopathy Screening Platform"}
@@ -170,11 +180,14 @@ async def predict_retinopathy_retfound(
     file: UploadFile = File(...)
 ):
     if not retfound_model:
-        detail = (
-            "RETFound is still loading (ViT on CPU can take several minutes), retry shortly"
-            if not _retfound_init_done
-            else "RETFound model not loaded"
-        )
+        if not _retfound_init_done:
+            detail = (
+                "RETFound is still loading (ViT on CPU can take several minutes), retry shortly"
+            )
+        elif _retfound_load_error:
+            detail = f"RETFound failed to load: {_retfound_load_error}"
+        else:
+            detail = "RETFound model not loaded"
         raise HTTPException(status_code=503, detail=detail)
 
     if not file.content_type.startswith('image/'):

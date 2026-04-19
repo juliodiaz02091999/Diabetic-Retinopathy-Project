@@ -16,6 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install gdown for Google Drive downloads
 RUN pip install gdown
 
+# opencv-python (GUI) requiere libGL.so.1 — no existe en slim y rompe import cv2.
+# Alguna dependencia puede instalar opencv-python; dejar solo headless al final.
+RUN pip uninstall -y opencv-python opencv-contrib-python 2>/dev/null || true \
+    && pip install --no-cache-dir "opencv-python-headless==4.8.1.78"
+
 # Copy application code
 COPY . .
 
