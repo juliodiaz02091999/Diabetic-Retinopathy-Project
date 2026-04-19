@@ -269,8 +269,6 @@ def compare_models(baseline_predict_function, test_images_path: str, max_images:
     """
     Función para comparar modelos fácilmente
     """
-    from model import predict_image  # Importar función del modelo actual
-    
     # Cargar imágenes de test
     print("🔍 Cargando imágenes de test...")
     images, labels = load_test_images(test_images_path, max_images)

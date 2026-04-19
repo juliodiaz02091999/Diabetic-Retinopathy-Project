@@ -3,12 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn
 import os
+
+# Antes de importar TensorFlow (carga perezosa en hilo): evita explosión de hilos en Cloud Run con 1–2 vCPU
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "2")
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "2")
+os.environ.setdefault("MKL_NUM_THREADS", "2")
+
 import threading
 import numpy as np
 import io
 from pydantic import BaseModel
 import tempfile
-import shutil
 
 app = FastAPI(
     title="RetinaScan AI API",
@@ -16,24 +22,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite todos los orígenes - útil para desarrollo y testing
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ML API Configuration
-
-# Pydantic Models for ML responses only
-
-class PredictionResponse(BaseModel):
-    confidence_score: float
-    prediction_class: str
-    diagnosis: str
-    model_used: str = "Current Model"
 
 class CNNPredictionResponse(BaseModel):
     confidence_score: float
@@ -44,34 +40,25 @@ class CNNPredictionResponse(BaseModel):
     model_used: str
     model_loaded: bool
 
+
 class RETFoundPredictionResponse(BaseModel):
-    # Interpretación principal (binaria para screening)
     confidence_score: float
     prediction_class: str
     diagnosis: str
     probabilities: dict
-    
-    # Interpretación detallada (clase individual más probable)
     individual_prediction: str
     individual_confidence: float
     individual_diagnosis: str
-    
-    # Interpretación binaria explícita
     binary_prediction: str
     binary_confidence: float
     binary_diagnosis: str
-    
-    # Recomendación clínica
     clinical_recommendation: str
-    
-    # Información detallada (compatibilidad)
     detailed_class: str
     detailed_probabilities: dict
     model_used: str
     checkpoint_loaded: bool
 
-# ── Models: load in background so uvicorn binds PORT before Cloud Run timeout ──
-model = None
+
 retfound_model = None
 cnn_model = None
 _models_ready = False
@@ -81,7 +68,6 @@ _retfound_load_error: str | None = None
 
 
 def _load_retfound_only():
-    """RETFound alone — puede tardar varios minutos en CPU; no bloquea CNN."""
     global retfound_model, _retfound_init_done, _retfound_load_error
     _retfound_load_error = None
     try:
@@ -102,14 +88,16 @@ def _load_retfound_only():
 
 
 def _load_core_models():
-    """TensorFlow + CNN + .h5. _models_ready se pone True en cuanto termina el CNN (el .h5 no debe bloquear /predict/cnn)."""
-    global model, cnn_model, _models_ready, _cnn_load_error
+    """Solo 64x3-CNN (TensorFlow SavedModel). RETFound se carga en otro hilo."""
+    global cnn_model, _models_ready, _cnn_load_error
     _cnn_load_error = None
+    print("[models] Core loader thread started", flush=True)
     try:
-        import tensorflow as tf
+        print("[models] Importing CyberAjuCNN (loads TensorFlow)…", flush=True)
         from cnn_model import CyberAjuCNN
 
         try:
+            print("[models] Loading SavedModel from disk (may take 1–3 min on small CPU)…", flush=True)
             cnn_model = CyberAjuCNN()
             if not cnn_model.model_loaded:
                 raise RuntimeError("CyberAjuCNN.model_loaded is False (SavedModel load failed — see logs)")
@@ -120,21 +108,7 @@ def _load_core_models():
             cnn_model = None
             _cnn_load_error = err[:800]
 
-        # Desbloquea health y mensajes 503 lo antes posible (cargar .h5 puede tardar o colgarse sin afectar al CNN)
         _models_ready = True
-
-        h5_path = "model-folder/diabetic-retino-model.h5"
-        if os.path.isfile(h5_path):
-            try:
-                model = tf.keras.models.load_model(h5_path)
-                print("✅ Current model (.h5) loaded successfully!")
-            except Exception as e:
-                print(f"❌ Error loading current model: {e}")
-                model = None
-        else:
-            model = None
-            print("ℹ️ Skipping legacy .h5 (file not in image) — use /predict/cnn or /predict/retfound")
-
         print("✅ Core models pass finished.")
     except Exception as e:
         err = str(e)
@@ -149,13 +123,11 @@ def _load_core_models():
 
 threading.Thread(target=_load_core_models, daemon=True).start()
 
-# ML API ready - Database and auth moved to Supabase
-
-# API Endpoints
 
 @app.get("/")
 async def root():
     return {"message": "RetinaScan AI API - Diabetic Retinopathy Screening Platform"}
+
 
 @app.get("/health")
 async def health_check():
@@ -186,67 +158,12 @@ async def health_check():
             ),
         },
         "models": {
-            "current_model": "available" if model else ("loading" if not _models_ready else "unavailable"),
             "retfound_quantized_model": _retfound_status(),
             "quantized_checkpoint_exists": os.path.exists("checkpoint-quantized-model.pth"),
             "cnn_model": _cnn_status(),
         },
     }
 
-# ML endpoints only - Auth and patient management moved to Supabase
-
-@app.post("/predict", response_model=PredictionResponse)
-async def predict_retinopathy(
-    file: UploadFile = File(...)
-):
-    if not model:
-        detail = "Model is still loading, retry shortly" if not _models_ready else "Model not loaded"
-        raise HTTPException(status_code=503, detail=detail)
-    
-    # Validate file type
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
-    try:
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-            # Read and save uploaded file
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-        
-        from model import predict_image
-
-        confidence_level = predict_image(model=model, image_path=temp_file_path)
-        confidence_score = float(confidence_level[0, 0]) * 100
-        
-        # Determine diagnosis
-        if confidence_level >= 0.5:
-            prediction_class = "NO-DR"
-            diagnosis = "Negative for Diabetic Retinopathy"
-        else:
-            prediction_class = "DR"
-            diagnosis = "Positive for Diabetic Retinopathy"
-            confidence_score = 100 - confidence_score
-        
-        # Clean up temporary file
-        os.unlink(temp_file_path)
-        
-        return PredictionResponse(
-            confidence_score=confidence_score,
-            prediction_class=prediction_class,
-            diagnosis=diagnosis,
-            model_used="Current Model (.h5)"
-        )
-        
-    except Exception as e:
-        # Clean up on error
-        if 'temp_file_path' in locals():
-            try:
-                os.unlink(temp_file_path)
-            except:
-                pass
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 @app.post("/predict/retfound", response_model=RETFoundPredictionResponse)
 async def predict_retinopathy_retfound(
@@ -259,60 +176,45 @@ async def predict_retinopathy_retfound(
             else "RETFound model not loaded"
         )
         raise HTTPException(status_code=503, detail=detail)
-    
-    # Validate file type
+
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
-    
+
     try:
-        # Create temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-            # Read and save uploaded file
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
-        
-        # Predict using RETFound
+
         result = retfound_model.predict(temp_file_path)
-        
-        # Clean up temporary file
         os.unlink(temp_file_path)
-        
+
         return RETFoundPredictionResponse(
-            # Interpretación principal (binaria para screening)
             confidence_score=result['confidence_score'],
             prediction_class=result['prediction_class'],
             diagnosis=result['diagnosis'],
             probabilities=result['probabilities'],
-            
-            # Interpretación detallada (clase individual más probable)
             individual_prediction=result['individual_prediction'],
             individual_confidence=result['individual_confidence'],
             individual_diagnosis=result['individual_diagnosis'],
-            
-            # Interpretación binaria explícita
             binary_prediction=result['binary_prediction'],
             binary_confidence=result['binary_confidence'],
             binary_diagnosis=result['binary_diagnosis'],
-            
-            # Recomendación clínica
             clinical_recommendation=result['clinical_recommendation'],
-            
-            # Información detallada (compatibilidad)
             detailed_class=result['detailed_class'],
             detailed_probabilities=result['detailed_probabilities'],
             model_used=result['model_used'],
             checkpoint_loaded=result['checkpoint_loaded']
         )
-        
+
     except Exception as e:
-        # Clean up on error
         if 'temp_file_path' in locals():
             try:
                 os.unlink(temp_file_path)
-            except:
+            except Exception:
                 pass
         raise HTTPException(status_code=500, detail=f"RETFound prediction failed: {str(e)}")
+
 
 @app.post("/predict/cnn", response_model=CNNPredictionResponse)
 async def predict_retinopathy_cnn(
@@ -345,26 +247,17 @@ async def predict_retinopathy_cnn(
         if 'temp_file_path' in locals():
             try:
                 os.unlink(temp_file_path)
-            except:
+            except Exception:
                 pass
         raise HTTPException(status_code=500, detail=f"CNN prediction failed: {str(e)}")
 
 
-# Prediction management moved to Supabase - only ML endpoints remain
-
 @app.get("/models/info")
 async def get_models_info():
-    """Get information about available models"""
     return {
-        "current_model": {
-            "name": "Current Model (.h5)",
-            "status": "available" if model else "unavailable",
-            "description": "Original diabetic retinopathy model",
-            "endpoint": "/predict"
-        },
         "retfound_quantized_model": {
             "name": "RETFound Official (Quantized)",
-            "status": "available" if retfound_model else "unavailable", 
+            "status": "available" if retfound_model else "unavailable",
             "description": "Foundation model for retinal imaging (Nature 2023) - Quantized version",
             "endpoint": "/predict/retfound",
             "checkpoint_loaded": getattr(retfound_model, 'checkpoint_loaded', False) if retfound_model else False
@@ -378,9 +271,9 @@ async def get_models_info():
         }
     }
 
+
 @app.post("/preprocess/preview")
 async def preprocess_preview(file: UploadFile = File(...)):
-    """Returns the Gaussian-filtered + resized image that the 64x3-CNN model receives before inference."""
     import cv2
 
     if not file.content_type.startswith('image/'):

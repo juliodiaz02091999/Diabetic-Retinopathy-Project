@@ -48,16 +48,6 @@ mlApi.interceptors.response.use(
 
 // Prediction API para el backend de ML
 export const predictionAPI = {
-  predict: (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return mlApi.post('/predict', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-  
   predictRETFound: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
