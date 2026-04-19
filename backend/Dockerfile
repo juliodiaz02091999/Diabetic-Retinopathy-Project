@@ -19,10 +19,11 @@ RUN pip install gdown
 # Copy application code
 COPY . .
 
-# Download quantized model checkpoint from Google Drive using gdown
+# Download quantized model checkpoint from Google Drive (gdown 5.x: --id removed; use URL + -O)
 RUN if [ ! -f "checkpoint-quantized-model.pth" ]; then \
     echo "Downloading quantized model checkpoint from Google Drive using gdown..." && \
-    gdown --id 1E6zIEuqAw7s6yl3st3N_jt-fNLfCegAO --output checkpoint-quantized-model.pth && \
+    ( gdown "https://drive.google.com/uc?id=1E6zIEuqAw7s6yl3st3N_jt-fNLfCegAO" -O checkpoint-quantized-model.pth \
+      || gdown --fuzzy "https://drive.google.com/file/d/1E6zIEuqAw7s6yl3st3N_jt-fNLfCegAO/view?usp=sharing" -O checkpoint-quantized-model.pth ) && \
     echo "Quantized model checkpoint downloaded successfully"; \
     fi
 
