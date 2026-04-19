@@ -15,5 +15,5 @@ scikit-learn==1.3.2
 matplotlib==3.8.2
 # HuggingFace para modelos
 huggingface-hub==0.13.3
-# OpenCV para análisis de imágenes
-opencv-python==4.8.1.78
+# Headless: opencv-python suele fallar en slim (libGL) y rompe el import al arrancar
+opencv-python-headless==4.8.1.78

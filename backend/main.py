@@ -3,19 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn
 import os
-from contextlib import contextmanager
+import threading
 import numpy as np
-import cv2
 import io
-import tensorflow as tf
 from pydantic import BaseModel
 import tempfile
 import shutil
-
-# Import our existing modules
-from model import predict_image
-from retfound_official import RETFoundOfficial  # Import RETFound
-from cnn_model import CyberAjuCNN              # Import 64x3-CNN
 
 app = FastAPI(
     title="RetinaScan AI API",
@@ -77,34 +70,55 @@ class RETFoundPredictionResponse(BaseModel):
     model_used: str
     checkpoint_loaded: bool
 
-# Load the ML models
-try:
-    model = tf.keras.models.load_model("model-folder/diabetic-retino-model.h5")
-    print("✅ Current model loaded successfully!")
-except Exception as e:
-    print(f"❌ Error loading current model: {e}")
-    model = None
+# ── Models: load in background so uvicorn binds PORT before Cloud Run timeout ──
+model = None
+retfound_model = None
+cnn_model = None
+_models_ready = False
 
-# Load RETFound quantized model
-try:
-    checkpoint_path = "checkpoint-quantized-model.pth"
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Quantized model checkpoint not found: {checkpoint_path}")
-    
-    retfound_model = RETFoundOfficial(checkpoint_path=checkpoint_path)
-    print(f"✅ RETFound quantized model loaded successfully from {checkpoint_path}!")
-except Exception as e:
-    print(f"❌ Error loading RETFound quantized model: {e}")
-    retfound_model = None
 
-# Load 64x3-CNN model
-try:
-    cnn_model = CyberAjuCNN()
-    if not cnn_model.model_loaded:
-        raise RuntimeError("Model failed to initialise")
-except Exception as e:
-    print(f"❌ Error loading 64x3-CNN model: {e}")
-    cnn_model = None
+def _load_all_models():
+    global model, retfound_model, cnn_model, _models_ready
+    try:
+        import tensorflow as tf
+        from retfound_official import RETFoundOfficial
+        from cnn_model import CyberAjuCNN
+
+        # 1) CNN first — /predict/cnn usable pronto; RETFound en CPU tarda mucho
+        try:
+            cnn_model = CyberAjuCNN()
+            if not cnn_model.model_loaded:
+                raise RuntimeError("Model failed to initialise")
+            print("✅ 64x3-CNN model loaded!")
+        except Exception as e:
+            print(f"❌ Error loading 64x3-CNN model: {e}")
+            cnn_model = None
+
+        try:
+            model = tf.keras.models.load_model("model-folder/diabetic-retino-model.h5")
+            print("✅ Current model loaded successfully!")
+        except Exception as e:
+            print(f"❌ Error loading current model: {e}")
+            model = None
+
+        try:
+            checkpoint_path = "checkpoint-quantized-model.pth"
+            if not os.path.exists(checkpoint_path):
+                raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+            retfound_model = RETFoundOfficial(checkpoint_path=checkpoint_path)
+            print(f"✅ RETFound loaded from {checkpoint_path}!")
+        except Exception as e:
+            print(f"❌ Error loading RETFound: {e}")
+            retfound_model = None
+
+        print("✅ Model loading pass finished.")
+    except Exception as e:
+        print(f"❌ Fatal error in model loader: {e}")
+    finally:
+        _models_ready = True
+
+
+threading.Thread(target=_load_all_models, daemon=True).start()
 
 # ML API ready - Database and auth moved to Supabase
 
@@ -117,14 +131,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {
-        "status": "healthy", 
+        "status": "healthy",
         "service": "RetinaScan AI API",
+        "models_ready": _models_ready,
         "models": {
-            "current_model": "available" if model else "unavailable",
-            "retfound_quantized_model": "available" if retfound_model else "unavailable",
-            "quantized_checkpoint_exists": os.path.exists("checkpoint-quantized-model.pth") if retfound_model else False,
-            "cnn_model": "available" if cnn_model else "unavailable",
-        }
+            "current_model": "available" if model else ("loading" if not _models_ready else "unavailable"),
+            "retfound_quantized_model": "available" if retfound_model else ("loading" if not _models_ready else "unavailable"),
+            "quantized_checkpoint_exists": os.path.exists("checkpoint-quantized-model.pth"),
+            "cnn_model": "available" if cnn_model else ("loading" if not _models_ready else "unavailable"),
+        },
     }
 
 # ML endpoints only - Auth and patient management moved to Supabase
@@ -134,7 +149,8 @@ async def predict_retinopathy(
     file: UploadFile = File(...)
 ):
     if not model:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+        detail = "Model is still loading, retry shortly" if not _models_ready else "Model not loaded"
+        raise HTTPException(status_code=503, detail=detail)
     
     # Validate file type
     if not file.content_type.startswith('image/'):
@@ -148,7 +164,8 @@ async def predict_retinopathy(
             temp_file.write(content)
             temp_file_path = temp_file.name
         
-        # Predict using the model
+        from model import predict_image
+
         confidence_level = predict_image(model=model, image_path=temp_file_path)
         confidence_score = float(confidence_level[0, 0]) * 100
         
@@ -185,7 +202,8 @@ async def predict_retinopathy_retfound(
     file: UploadFile = File(...)
 ):
     if not retfound_model:
-        raise HTTPException(status_code=500, detail="RETFound model not loaded")
+        detail = "RETFound is still loading, retry shortly" if not _models_ready else "RETFound model not loaded"
+        raise HTTPException(status_code=503, detail=detail)
     
     # Validate file type
     if not file.content_type.startswith('image/'):
@@ -246,7 +264,8 @@ async def predict_retinopathy_cnn(
     file: UploadFile = File(...)
 ):
     if not cnn_model:
-        raise HTTPException(status_code=500, detail="64x3-CNN model not loaded")
+        detail = "CNN is still loading, retry shortly" if not _models_ready else "64x3-CNN model not loaded"
+        raise HTTPException(status_code=503, detail=detail)
 
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
@@ -302,11 +321,13 @@ async def get_models_info():
 @app.post("/preprocess/preview")
 async def preprocess_preview(file: UploadFile = File(...)):
     """Returns the Gaussian-filtered + resized image that the 64x3-CNN model receives before inference."""
+    import cv2
+
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     try:
         content = await file.read()
-        nparr = np.frombuffer(content, np.uint8)
+        nparr = np.frombuffer(content, dtype=np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (224, 224))

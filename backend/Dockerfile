@@ -46,5 +46,5 @@ RUN mkdir -p /app/diabetic_retinopathy_dataset
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Cloud Run inyecta PORT; local suele usar 8000
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
