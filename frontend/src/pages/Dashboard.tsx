@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { predictionAPI } from '@/lib/api';
+import { predictionAPI, getMlErrorDetail } from '@/lib/api';
 import { supabasePredictionAPI } from '@/lib/supabaseApi';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
@@ -58,6 +58,7 @@ const Dashboard = () => {
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +81,7 @@ const Dashboard = () => {
     setSelectedFile(file);
     setPrediction(null);
     setSaveMessage(null);
+    setAnalysisError(null);
     setPreprocessedPreview(null);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
@@ -95,10 +97,11 @@ const Dashboard = () => {
   const handleAnalyze = async () => {
     if (!selectedFile) return;
     setIsAnalyzing(true);
+    setAnalysisError(null);
     try {
       const response = selectedModel === 'cnn'
-        ? await predictionAPI.predictCNN(selectedFile)
-        : await predictionAPI.predictRETFound(selectedFile);
+        ? await predictionAPI.predictCNNWithWarmup(selectedFile)
+        : await predictionAPI.predictRETFoundWithWarmup(selectedFile);
       setPrediction(response.data);
       try {
         await supabasePredictionAPI.save({
@@ -111,6 +114,7 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Analysis failed:', error);
+      setAnalysisError(getMlErrorDetail(error));
     } finally {
       setIsAnalyzing(false);
     }
@@ -253,6 +257,7 @@ const Dashboard = () => {
                         setSelectedModel(m.id);
                         setPrediction(null);
                         setSaveMessage(null);
+                        setAnalysisError(null);
                         if (m.id === 'cnn' && selectedFile) {
                           fetchPreprocessedPreview(selectedFile);
                         } else {
@@ -330,6 +335,13 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
+
+              {analysisError && (
+                <div className="alert-info flex items-start gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                  <p className="text-foreground/90 leading-snug">{analysisError}</p>
+                </div>
+              )}
 
               {/* Analyze button */}
               <button
