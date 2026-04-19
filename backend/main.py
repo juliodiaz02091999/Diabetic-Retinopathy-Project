@@ -102,7 +102,7 @@ def _load_retfound_only():
 
 
 def _load_core_models():
-    """TensorFlow + CNN + .h5 — al terminar, /predict/cnn puede responder sin esperar RETFound."""
+    """TensorFlow + CNN + .h5. _models_ready se pone True en cuanto termina el CNN (el .h5 no debe bloquear /predict/cnn)."""
     global model, cnn_model, _models_ready, _cnn_load_error
     _cnn_load_error = None
     try:
@@ -120,22 +120,31 @@ def _load_core_models():
             cnn_model = None
             _cnn_load_error = err[:800]
 
-        try:
-            model = tf.keras.models.load_model("model-folder/diabetic-retino-model.h5")
-            print("✅ Current model loaded successfully!")
-        except Exception as e:
-            print(f"❌ Error loading current model: {e}")
-            model = None
+        # Desbloquea health y mensajes 503 lo antes posible (cargar .h5 puede tardar o colgarse sin afectar al CNN)
+        _models_ready = True
 
-        print("✅ Core models (CNN + .h5) pass finished.")
+        h5_path = "model-folder/diabetic-retino-model.h5"
+        if os.path.isfile(h5_path):
+            try:
+                model = tf.keras.models.load_model(h5_path)
+                print("✅ Current model (.h5) loaded successfully!")
+            except Exception as e:
+                print(f"❌ Error loading current model: {e}")
+                model = None
+        else:
+            model = None
+            print("ℹ️ Skipping legacy .h5 (file not in image) — use /predict/cnn or /predict/retfound")
+
+        print("✅ Core models pass finished.")
     except Exception as e:
         err = str(e)
         print(f"❌ Fatal error in core model loader: {e}")
         if _cnn_load_error is None:
             _cnn_load_error = err[:800]
-    finally:
-        _models_ready = True
-        threading.Thread(target=_load_retfound_only, daemon=True).start()
+        if not _models_ready:
+            _models_ready = True
+
+    threading.Thread(target=_load_retfound_only, daemon=True).start()
 
 
 threading.Thread(target=_load_core_models, daemon=True).start()
