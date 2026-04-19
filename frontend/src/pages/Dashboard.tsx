@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { predictionAPI, getMlErrorDetail } from '@/lib/api';
@@ -61,16 +61,39 @@ const Dashboard = () => {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const preprocessedBlobRef = useRef<string | null>(null);
+
+  const releasePreprocessedBlob = () => {
+    const u = preprocessedBlobRef.current;
+    if (u?.startsWith('blob:')) URL.revokeObjectURL(u);
+    preprocessedBlobRef.current = null;
+    setPreprocessedPreview(null);
+  };
+
+  const setPreprocessedBlobUrl = (url: string | null) => {
+    const prev = preprocessedBlobRef.current;
+    if (prev?.startsWith('blob:') && prev !== url) URL.revokeObjectURL(prev);
+    preprocessedBlobRef.current = url;
+    setPreprocessedPreview(url);
+  };
+
+  useEffect(
+    () => () => {
+      const u = preprocessedBlobRef.current;
+      if (u?.startsWith('blob:')) URL.revokeObjectURL(u);
+    },
+    []
+  );
 
   const fetchPreprocessedPreview = async (file: File) => {
     setIsFetchingPreview(true);
-    setPreprocessedPreview(null);
+    releasePreprocessedBlob();
     try {
       const response = await predictionAPI.preprocessPreview(file);
       const url = URL.createObjectURL(response.data);
-      setPreprocessedPreview(url);
+      setPreprocessedBlobUrl(url);
     } catch {
-      setPreprocessedPreview(null);
+      releasePreprocessedBlob();
     } finally {
       setIsFetchingPreview(false);
     }
@@ -82,7 +105,7 @@ const Dashboard = () => {
     setPrediction(null);
     setSaveMessage(null);
     setAnalysisError(null);
-    setPreprocessedPreview(null);
+    releasePreprocessedBlob();
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(file);
@@ -118,6 +141,7 @@ const Dashboard = () => {
         .save({
           prediction_class: mlResult.prediction_class,
           confidence_score: mlResult.confidence_score,
+          model_used: mlResult.model_used,
         })
         .then(() => setSaveMessage('Prediction saved to patient history'))
         .catch(() => setSaveMessage('Create a patient profile to save predictions'));
@@ -265,7 +289,7 @@ const Dashboard = () => {
                         if (m.id === 'cnn' && selectedFile) {
                           fetchPreprocessedPreview(selectedFile);
                         } else {
-                          setPreprocessedPreview(null);
+                          releasePreprocessedBlob();
                         }
                       }}
                       className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 rounded-t-lg ${

@@ -309,13 +309,23 @@ class RETFoundOfficial:
                 }
         except Exception as e:
             print(f"❌ Error en predicción: {e}")
+            msg = f'Error en predicción: {str(e)}'
             return {
                 'prediction_class': 'Error',
                 'confidence_score': 0.0,
-                'diagnosis': f'Error en predicción: {str(e)}',
+                'diagnosis': msg,
                 'probabilities': {'No_DR': 0.0, 'DR': 0.0},
+                'individual_prediction': 'Error',
+                'individual_confidence': 0.0,
+                'individual_diagnosis': msg,
+                'binary_prediction': 'Error',
+                'binary_confidence': 0.0,
+                'binary_diagnosis': msg,
+                'clinical_recommendation': 'Prediction failed; retry with a valid fundus image.',
+                'detailed_class': 'Error',
+                'detailed_probabilities': {},
                 'model_used': "RETFound_ERROR",
-                'checkpoint_loaded': False,
+                'checkpoint_loaded': os.path.exists(self.checkpoint_path),
                 'raw_outputs': []
             }
 

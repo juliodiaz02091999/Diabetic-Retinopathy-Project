@@ -24,7 +24,8 @@ import tempfile
 async def lifespan(app: FastAPI):
     # Arrancar cargas en segundo plano *después* de que uvicorn enlace el puerto (Cloud Run probe).
     print("[startup] Background model loaders starting…", flush=True)
-    threading.Thread(target=_load_core_models, daemon=True).start()
+    threading.Thread(target=_load_cnn_only, daemon=True).start()
+    threading.Thread(target=_schedule_retfound_load, daemon=True).start()
     yield
     print("[shutdown] RetinaScan API shutdown", flush=True)
 
@@ -101,11 +102,11 @@ def _load_retfound_only():
         _retfound_init_done = True
 
 
-def _load_core_models():
-    """Solo 64x3-CNN (TensorFlow SavedModel). RETFound se carga en otro hilo."""
+def _load_cnn_only():
+    """64x3-CNN (TensorFlow SavedModel). RETFound va en otro hilo (_schedule_retfound_load)."""
     global cnn_model, _models_ready, _cnn_load_error
     _cnn_load_error = None
-    print("[models] Core loader thread started", flush=True)
+    print("[models] CNN loader thread started", flush=True)
     try:
         print("[models] Importing CyberAjuCNN (loads TensorFlow)…", flush=True)
         from cnn_model import CyberAjuCNN
@@ -123,26 +124,28 @@ def _load_core_models():
             _cnn_load_error = err[:800]
 
         _models_ready = True
-        print("✅ Core models pass finished.")
+        print("✅ CNN loader thread finished.", flush=True)
     except Exception as e:
         err = str(e)
-        print(f"❌ Fatal error in core model loader: {e}")
+        print(f"❌ Fatal error in CNN loader: {e}")
         if _cnn_load_error is None:
             _cnn_load_error = err[:800]
         if not _models_ready:
             _models_ready = True
 
-    # RETFound (PyTorch) compite por RAM con TensorFlow en la misma instancia; en Cloud Run
-    # eso puede provocar OOM o reinicios justo cuando el CNN ya cargó. Retrasar reduce el pico.
-    delay = float(os.environ.get("RETFOUND_LOAD_DELAY_SEC", "90"))
 
-    def _start_retfound_after_delay():
-        if delay > 0:
-            print(f"[models] RETFound load scheduled in {delay}s (set RETFOUND_LOAD_DELAY_SEC=0 to disable)", flush=True)
-            time.sleep(delay)
-        threading.Thread(target=_load_retfound_only, daemon=True).start()
-
-    threading.Thread(target=_start_retfound_after_delay, daemon=True).start()
+def _schedule_retfound_load():
+    """RETFound en paralelo con el CNN (como antes del retraso post-CNN). Opcional: dormir al inicio para Cloud Run."""
+    delay = float(os.environ.get("RETFOUND_LOAD_DELAY_SEC", "0"))
+    if delay > 0:
+        print(
+            f"[models] RETFound: sleep {delay}s then load (RETFOUND_LOAD_DELAY_SEC; reduce pico RAM en Cloud Run)",
+            flush=True,
+        )
+        time.sleep(delay)
+    else:
+        print("[models] RETFound: starting load in parallel with CNN", flush=True)
+    _load_retfound_only()
 
 
 @app.get("/")
@@ -201,7 +204,8 @@ async def predict_retinopathy_retfound(
             detail = "RETFound model not loaded"
         raise HTTPException(status_code=503, detail=detail)
 
-    if not file.content_type.startswith('image/'):
+    ct = file.content_type or ""
+    if not ct.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     try:
@@ -253,7 +257,8 @@ async def predict_retinopathy_cnn(
             detail = "64x3-CNN model not loaded"
         raise HTTPException(status_code=503, detail=detail)
 
-    if not file.content_type.startswith('image/'):
+    ct = file.content_type or ""
+    if not ct.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     try:
@@ -300,7 +305,8 @@ async def get_models_info():
 async def preprocess_preview(file: UploadFile = File(...)):
     import cv2
 
-    if not file.content_type.startswith('image/'):
+    ct = file.content_type or ""
+    if not ct.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     try:
         content = await file.read()

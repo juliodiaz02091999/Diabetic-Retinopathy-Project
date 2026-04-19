@@ -7,6 +7,8 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app
+      # En Cloud Run con poca RAM, sube a 60–90 para escalonar CNN vs RETFound.
+      - RETFOUND_LOAD_DELAY_SEC=0
     volumes:
       - backend_data:/app/data
       # No montar ./backend/model-folder vacío: taparía el SavedModel ya metido en la imagen al hacer build.

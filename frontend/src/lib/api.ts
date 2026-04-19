@@ -43,7 +43,8 @@ function isMlWarmup503(error: unknown): boolean {
 
 // Cloud Run puede mandar cada request a otra instancia (cada una carga TF/PyTorch al arrancar).
 const ML_WARMUP_MAX_ATTEMPTS = 36;
-const ML_WARMUP_MAX_ATTEMPTS_RETFOUND = 48;
+// RETFound + SavedModel en CPU pueden tardar varios minutos en frío; no cortar antes que el backend.
+const ML_WARMUP_MAX_ATTEMPTS_RETFOUND = 96;
 const ML_WARMUP_DELAY_MS = 5000;
 
 // Sin timeout, una petición colgada deja la UI en "Analyzing..." para siempre.
