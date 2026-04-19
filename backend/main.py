@@ -75,16 +75,34 @@ model = None
 retfound_model = None
 cnn_model = None
 _models_ready = False
+_retfound_init_done = False
 
 
-def _load_all_models():
-    global model, retfound_model, cnn_model, _models_ready
+def _load_retfound_only():
+    """RETFound alone — puede tardar varios minutos en CPU; no bloquea CNN."""
+    global retfound_model, _retfound_init_done
+    try:
+        from retfound_official import RETFoundOfficial
+
+        checkpoint_path = "checkpoint-quantized-model.pth"
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        retfound_model = RETFoundOfficial(checkpoint_path=checkpoint_path)
+        print(f"✅ RETFound loaded from {checkpoint_path}!")
+    except Exception as e:
+        print(f"❌ Error loading RETFound: {e}")
+        retfound_model = None
+    finally:
+        _retfound_init_done = True
+
+
+def _load_core_models():
+    """TensorFlow + CNN + .h5 — al terminar, /predict/cnn puede responder sin esperar RETFound."""
+    global model, cnn_model, _models_ready
     try:
         import tensorflow as tf
-        from retfound_official import RETFoundOfficial
         from cnn_model import CyberAjuCNN
 
-        # 1) CNN first — /predict/cnn usable pronto; RETFound en CPU tarda mucho
         try:
             cnn_model = CyberAjuCNN()
             if not cnn_model.model_loaded:
@@ -101,24 +119,15 @@ def _load_all_models():
             print(f"❌ Error loading current model: {e}")
             model = None
 
-        try:
-            checkpoint_path = "checkpoint-quantized-model.pth"
-            if not os.path.exists(checkpoint_path):
-                raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-            retfound_model = RETFoundOfficial(checkpoint_path=checkpoint_path)
-            print(f"✅ RETFound loaded from {checkpoint_path}!")
-        except Exception as e:
-            print(f"❌ Error loading RETFound: {e}")
-            retfound_model = None
-
-        print("✅ Model loading pass finished.")
+        print("✅ Core models (CNN + .h5) pass finished.")
     except Exception as e:
-        print(f"❌ Fatal error in model loader: {e}")
+        print(f"❌ Fatal error in core model loader: {e}")
     finally:
         _models_ready = True
+        threading.Thread(target=_load_retfound_only, daemon=True).start()
 
 
-threading.Thread(target=_load_all_models, daemon=True).start()
+threading.Thread(target=_load_core_models, daemon=True).start()
 
 # ML API ready - Database and auth moved to Supabase
 
@@ -134,6 +143,7 @@ async def health_check():
         "status": "healthy",
         "service": "RetinaScan AI API",
         "models_ready": _models_ready,
+        "retfound_init_done": _retfound_init_done,
         "models": {
             "current_model": "available" if model else ("loading" if not _models_ready else "unavailable"),
             "retfound_quantized_model": "available" if retfound_model else ("loading" if not _models_ready else "unavailable"),
@@ -202,7 +212,11 @@ async def predict_retinopathy_retfound(
     file: UploadFile = File(...)
 ):
     if not retfound_model:
-        detail = "RETFound is still loading, retry shortly" if not _models_ready else "RETFound model not loaded"
+        detail = (
+            "RETFound is still loading (ViT on CPU can take several minutes), retry shortly"
+            if not _retfound_init_done
+            else "RETFound model not loaded"
+        )
         raise HTTPException(status_code=503, detail=detail)
     
     # Validate file type
