@@ -13,6 +13,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")
 os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 import threading
+import time
 import numpy as np
 import io
 from pydantic import BaseModel
@@ -131,7 +132,17 @@ def _load_core_models():
         if not _models_ready:
             _models_ready = True
 
-    threading.Thread(target=_load_retfound_only, daemon=True).start()
+    # RETFound (PyTorch) compite por RAM con TensorFlow en la misma instancia; en Cloud Run
+    # eso puede provocar OOM o reinicios justo cuando el CNN ya cargó. Retrasar reduce el pico.
+    delay = float(os.environ.get("RETFOUND_LOAD_DELAY_SEC", "90"))
+
+    def _start_retfound_after_delay():
+        if delay > 0:
+            print(f"[models] RETFound load scheduled in {delay}s (set RETFOUND_LOAD_DELAY_SEC=0 to disable)", flush=True)
+            time.sleep(delay)
+        threading.Thread(target=_load_retfound_only, daemon=True).start()
+
+    threading.Thread(target=_start_retfound_after_delay, daemon=True).start()
 
 
 @app.get("/")

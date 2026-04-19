@@ -29,31 +29,24 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const AUTH_LOADING_MAX_MS = 8000;
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    console.log('AuthContext: useEffect started');
 
-    // Timeout de seguridad para evitar carga infinita
     const safetyTimeout = setTimeout(() => {
-      if (isMounted) {
-        console.log('AuthContext: Safety timeout reached, setting isLoading to false');
-        setIsLoading(false);
-      }
-    }, 3000); // 3 segundos máximo
+      if (isMounted) setIsLoading(false);
+    }, AUTH_LOADING_MAX_MS);
 
-    // Obtener sesión actual
     const getCurrentSession = async () => {
       try {
-        console.log('AuthContext: Getting current session...');
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('AuthContext: Session result:', session);
-        
+
         if (session?.user && isMounted) {
-          // Crear un objeto User básico con la información disponible
           const basicUser: User = {
             id: session.user.id,
             username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'user',
@@ -61,17 +54,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: session.user.email || '',
             created_at: new Date().toISOString()
           };
-          
-          console.log('AuthContext: Setting user from session:', basicUser);
           setUser(basicUser);
-        } else {
-          console.log('AuthContext: No session found');
         }
       } catch (error) {
         console.error('Error getting current session:', error);
       } finally {
         if (isMounted) {
-          console.log('AuthContext: Setting isLoading to false');
           setIsLoading(false);
           clearTimeout(safetyTimeout);
         }
@@ -80,10 +68,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     getCurrentSession();
 
-    // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('AuthContext: Auth state change:', event, session);
         if (!isMounted) return;
 
         if (event === 'SIGNED_IN' && session?.user) {
@@ -94,18 +80,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: session.user.email || '',
             created_at: new Date().toISOString()
           };
-          
-          console.log('AuthContext: Setting user from auth state change:', basicUser);
           setUser(basicUser);
         } else if (event === 'SIGNED_OUT') {
-          console.log('AuthContext: User signed out');
           setUser(null);
         }
       }
     );
 
     return () => {
-      console.log('AuthContext: Cleanup - unmounting');
       isMounted = false;
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
@@ -115,7 +97,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     try {
       await supabaseAuthAPI.login({ email, password });
-      // El usuario se establecerá automáticamente en el useEffect
     } catch (error) {
       throw error;
     }
@@ -129,7 +110,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }) => {
     try {
       await supabaseAuthAPI.register(userData);
-      // El usuario se establecerá automáticamente en el useEffect
     } catch (error) {
       throw error;
     }
@@ -141,7 +121,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
     } catch (error) {
       console.error('Error during logout:', error);
-      // Forzar logout local en caso de error
       setUser(null);
     }
   };

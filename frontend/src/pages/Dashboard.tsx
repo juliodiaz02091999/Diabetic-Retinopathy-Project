@@ -98,25 +98,29 @@ const Dashboard = () => {
     if (!selectedFile) return;
     setIsAnalyzing(true);
     setAnalysisError(null);
+    let mlResult: PredictionResult | null = null;
     try {
       const response = selectedModel === 'cnn'
         ? await predictionAPI.predictCNNWithWarmup(selectedFile)
         : await predictionAPI.predictRETFoundWithWarmup(selectedFile);
+      mlResult = response.data;
       setPrediction(response.data);
-      try {
-        await supabasePredictionAPI.save({
-          prediction_class: response.data.prediction_class,
-          confidence_score: response.data.confidence_score,
-        });
-        setSaveMessage('Prediction saved to patient history');
-      } catch {
-        setSaveMessage('Create a patient profile to save predictions');
-      }
     } catch (error) {
       console.error('Analysis failed:', error);
       setAnalysisError(getMlErrorDetail(error));
     } finally {
       setIsAnalyzing(false);
+    }
+
+    // Guardar en Supabase no debe bloquear el spinner: si save() cuelga, antes parecía “carga infinita”.
+    if (mlResult) {
+      void supabasePredictionAPI
+        .save({
+          prediction_class: mlResult.prediction_class,
+          confidence_score: mlResult.confidence_score,
+        })
+        .then(() => setSaveMessage('Prediction saved to patient history'))
+        .catch(() => setSaveMessage('Create a patient profile to save predictions'));
     }
   };
 
