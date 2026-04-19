@@ -76,11 +76,14 @@ retfound_model = None
 cnn_model = None
 _models_ready = False
 _retfound_init_done = False
+_cnn_load_error: str | None = None
+_retfound_load_error: str | None = None
 
 
 def _load_retfound_only():
     """RETFound alone — puede tardar varios minutos en CPU; no bloquea CNN."""
-    global retfound_model, _retfound_init_done
+    global retfound_model, _retfound_init_done, _retfound_load_error
+    _retfound_load_error = None
     try:
         from retfound_official import RETFoundOfficial
 
@@ -90,15 +93,18 @@ def _load_retfound_only():
         retfound_model = RETFoundOfficial(checkpoint_path=checkpoint_path)
         print(f"✅ RETFound loaded from {checkpoint_path}!")
     except Exception as e:
+        err = str(e)
         print(f"❌ Error loading RETFound: {e}")
         retfound_model = None
+        _retfound_load_error = err[:800]
     finally:
         _retfound_init_done = True
 
 
 def _load_core_models():
     """TensorFlow + CNN + .h5 — al terminar, /predict/cnn puede responder sin esperar RETFound."""
-    global model, cnn_model, _models_ready
+    global model, cnn_model, _models_ready, _cnn_load_error
+    _cnn_load_error = None
     try:
         import tensorflow as tf
         from cnn_model import CyberAjuCNN
@@ -106,11 +112,13 @@ def _load_core_models():
         try:
             cnn_model = CyberAjuCNN()
             if not cnn_model.model_loaded:
-                raise RuntimeError("Model failed to initialise")
+                raise RuntimeError("CyberAjuCNN.model_loaded is False (SavedModel load failed — see logs)")
             print("✅ 64x3-CNN model loaded!")
         except Exception as e:
+            err = str(e)
             print(f"❌ Error loading 64x3-CNN model: {e}")
             cnn_model = None
+            _cnn_load_error = err[:800]
 
         try:
             model = tf.keras.models.load_model("model-folder/diabetic-retino-model.h5")
@@ -121,7 +129,10 @@ def _load_core_models():
 
         print("✅ Core models (CNN + .h5) pass finished.")
     except Exception as e:
+        err = str(e)
         print(f"❌ Fatal error in core model loader: {e}")
+        if _cnn_load_error is None:
+            _cnn_load_error = err[:800]
     finally:
         _models_ready = True
         threading.Thread(target=_load_retfound_only, daemon=True).start()
@@ -139,16 +150,37 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    def _cnn_status() -> str:
+        if cnn_model:
+            return "available"
+        if not _models_ready:
+            return "loading"
+        return "unavailable"
+
+    def _retfound_status() -> str:
+        if retfound_model:
+            return "available"
+        if not _retfound_init_done:
+            return "loading"
+        return "unavailable"
+
     return {
         "status": "healthy",
         "service": "RetinaScan AI API",
         "models_ready": _models_ready,
         "retfound_init_done": _retfound_init_done,
+        "diagnostics": {
+            "cnn_load_error": _cnn_load_error,
+            "retfound_load_error": _retfound_load_error,
+            "saved_model_pb_exists": os.path.isfile(
+                os.path.join("model-folder", "64x3-CNN.model", "saved_model.pb")
+            ),
+        },
         "models": {
             "current_model": "available" if model else ("loading" if not _models_ready else "unavailable"),
-            "retfound_quantized_model": "available" if retfound_model else ("loading" if not _models_ready else "unavailable"),
+            "retfound_quantized_model": _retfound_status(),
             "quantized_checkpoint_exists": os.path.exists("checkpoint-quantized-model.pth"),
-            "cnn_model": "available" if cnn_model else ("loading" if not _models_ready else "unavailable"),
+            "cnn_model": _cnn_status(),
         },
     }
 
@@ -278,7 +310,12 @@ async def predict_retinopathy_cnn(
     file: UploadFile = File(...)
 ):
     if not cnn_model:
-        detail = "CNN is still loading, retry shortly" if not _models_ready else "64x3-CNN model not loaded"
+        if not _models_ready:
+            detail = "CNN is still loading, retry shortly"
+        elif _cnn_load_error:
+            detail = f"64x3-CNN failed to load: {_cnn_load_error}"
+        else:
+            detail = "64x3-CNN model not loaded"
         raise HTTPException(status_code=503, detail=detail)
 
     if not file.content_type.startswith('image/'):

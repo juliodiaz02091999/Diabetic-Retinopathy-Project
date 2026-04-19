@@ -35,9 +35,14 @@ class CyberAjuCNN:
             print(f"✅ 64x3-CNN model loaded from {self.model_path}")
         except Exception as e:
             print(f"❌ Error loading 64x3-CNN model: {e}")
+            raise
 
     def _preprocess(self, image_path: str) -> tf.Tensor:
-        img = cv2.imread(image_path)
+        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Could not read image: {image_path!r}")
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (224, 224))
         img = cv2.addWeighted(img, 4, cv2.GaussianBlur(img, (0, 0), sigmaX=10), -4, 128)
