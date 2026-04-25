@@ -18,6 +18,7 @@ import numpy as np
 import io
 from pydantic import BaseModel
 import tempfile
+import importlib.metadata
 
 
 @asynccontextmanager
@@ -194,6 +195,12 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    def _pkg_version(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except Exception:
+            return None
+
     def _cnn_status() -> str:
         if cnn_model:
             return "available"
@@ -222,6 +229,11 @@ async def health_check():
         "retfound_init_done": _retfound_init_done,
         "gradenet_init_done": _gradenet_init_done,
         "diagnostics": {
+            "versions": {
+                "python": f"{os.sys.version_info.major}.{os.sys.version_info.minor}.{os.sys.version_info.micro}",
+                "tensorflow": _pkg_version("tensorflow"),
+                "keras": _pkg_version("keras"),
+            },
             "cnn_load_error": _cnn_load_error,
             "retfound_load_error": _retfound_load_error,
             "gradenet_load_error": _gradenet_load_error,
