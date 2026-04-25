@@ -107,7 +107,27 @@ class GradeNetV4:
             return
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"GradeNet .keras no encontrado: {self.model_path}")
-        self.model = tf.keras.models.load_model(self.model_path, compile=False)
+
+        # Compat: algunos .keras se guardaron con Keras 3 (keras.src.*) y fallan con tf.keras antiguo.
+        # TF >= 2.16 usa Keras 3; aun así, hacemos fallback para entornos mixtos.
+        try:
+            import keras  # type: ignore
+
+            try:
+                self.model = keras.saving.load_model(  # type: ignore[attr-defined]
+                    self.model_path,
+                    compile=False,
+                    safe_mode=False,
+                )
+            except TypeError:
+                # Keras sin safe_mode
+                self.model = keras.saving.load_model(self.model_path, compile=False)  # type: ignore[attr-defined]
+        except Exception:
+            # Fallback final: tf.keras
+            try:
+                self.model = tf.keras.models.load_model(self.model_path, compile=False, safe_mode=False)  # type: ignore[arg-type]
+            except TypeError:
+                self.model = tf.keras.models.load_model(self.model_path, compile=False)
 
     def predict(self, img_path: str) -> dict[str, Any]:
         self.load()
