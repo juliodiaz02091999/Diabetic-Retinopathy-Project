@@ -10,7 +10,7 @@ import {
   Activity, TrendingUp, Sparkles, Shield, X, Brain
 } from 'lucide-react';
 
-type ModelType = 'retfound' | 'cnn';
+type ModelType = 'retfound' | 'cnn' | 'gradenet';
 
 interface RETFoundPredictionResult {
   confidence_score: number;
@@ -40,11 +40,28 @@ interface CNNPredictionResult {
   model_loaded: boolean;
 }
 
-type PredictionResult = RETFoundPredictionResult | CNNPredictionResult;
+interface GradeNetPredictionResult {
+  confidence_score: number;
+  prediction_class: string;
+  diagnosis: string;
+  probabilities: Record<string, number>;
+  clinical_recommendation: string;
+  model_used: string;
+  model_path: string;
+  model_loaded: boolean;
+  argmax_class: number;
+  argmax_label: string;
+  final_class: number;
+  final_label: string;
+  expected_score: number;
+}
+
+type PredictionResult = RETFoundPredictionResult | CNNPredictionResult | GradeNetPredictionResult;
 
 const MODELS: { id: ModelType; label: string; sublabel: string; icon: React.ElementType; pill: string }[] = [
   { id: 'retfound', label: 'RETFound', sublabel: 'Foundation model · Nature 2023', icon: Sparkles, pill: 'RETFound · Quantized' },
   { id: 'cnn',      label: '64x3-CNN',  sublabel: 'Cyber-Aju CNN · >93% accuracy',  icon: Brain,    pill: '64x3-CNN · SavedModel' },
+  { id: 'gradenet', label: 'GradeNet',  sublabel: 'EfficientNet · 5-grade DR',      icon: Target,   pill: 'GradeNet v4 · .keras' },
 ];
 
 const Dashboard = () => {
@@ -123,9 +140,12 @@ const Dashboard = () => {
     setAnalysisError(null);
     let mlResult: PredictionResult | null = null;
     try {
-      const response = selectedModel === 'cnn'
-        ? await predictionAPI.predictCNNWithWarmup(selectedFile)
-        : await predictionAPI.predictRETFoundWithWarmup(selectedFile);
+      const response =
+        selectedModel === 'cnn'
+          ? await predictionAPI.predictCNNWithWarmup(selectedFile)
+          : selectedModel === 'gradenet'
+            ? await predictionAPI.predictGradeNetWithWarmup(selectedFile)
+            : await predictionAPI.predictRETFoundWithWarmup(selectedFile);
       mlResult = response.data;
       setPrediction(response.data);
     } catch (error) {
@@ -152,6 +172,8 @@ const Dashboard = () => {
     p !== null && 'detailed_class' in p;
   const isCNN = (p: PredictionResult | null): p is CNNPredictionResult =>
     p !== null && 'model_loaded' in p;
+  const isGradeNet = (p: PredictionResult | null): p is GradeNetPredictionResult =>
+    p !== null && 'expected_score' in p && 'final_label' in p;
   const isDR = prediction?.prediction_class === 'DR';
 
   const activeModel = MODELS.find(m => m.id === selectedModel)!;
@@ -525,6 +547,57 @@ const Dashboard = () => {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+
+                  <div className="surface p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Microscope className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-semibold text-foreground">Clinical Recommendation</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{prediction.clinical_recommendation}</p>
+                  </div>
+                </>
+              )}
+
+              {/* GradeNet: grading summary + probabilities */}
+              {isGradeNet(prediction) && (
+                <>
+                  <div className="surface p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-semibold text-foreground">DR Grade (GradeNet v4)</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="surface-muted p-3 rounded-xl">
+                        <p className="text-xs text-muted-foreground mb-1">Final grade</p>
+                        <p className="text-sm font-bold text-foreground">{prediction.final_label}</p>
+                      </div>
+                      <div className="surface-muted p-3 rounded-xl">
+                        <p className="text-xs text-muted-foreground mb-1">Expected score</p>
+                        <p className="text-sm font-bold text-foreground">{prediction.expected_score.toFixed(3)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="surface p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-semibold text-foreground">Grade Probabilities</p>
+                    </div>
+                    <div className="space-y-3">
+                      {Object.entries(prediction.probabilities).map(([label, prob]) => (
+                        <div key={label} className="flex items-center gap-3">
+                          <p className="text-xs font-medium text-muted-foreground w-24 shrink-0 truncate">{label}</p>
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 bg-foreground/40"
+                              style={{ width: `${prob}%` }}
+                            />
+                          </div>
+                          <p className="text-xs font-semibold text-foreground w-12 text-right">{(prob as number).toFixed(1)}%</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
 

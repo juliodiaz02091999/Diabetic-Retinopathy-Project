@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     print("[startup] Background model loaders starting…", flush=True)
     threading.Thread(target=_load_cnn_only, daemon=True).start()
     threading.Thread(target=_schedule_retfound_load, daemon=True).start()
+    threading.Thread(target=_load_gradenet_only, daemon=True).start()
     yield
     print("[shutdown] RetinaScan API shutdown", flush=True)
 
@@ -74,12 +75,32 @@ class RETFoundPredictionResponse(BaseModel):
     checkpoint_loaded: bool
 
 
+class GradeNetPredictionResponse(BaseModel):
+    confidence_score: float
+    prediction_class: str
+    diagnosis: str
+    probabilities: dict
+    clinical_recommendation: str
+    model_used: str
+    model_path: str
+    model_loaded: bool
+    # extra grading fields
+    argmax_class: int
+    argmax_label: str
+    final_class: int
+    final_label: str
+    expected_score: float
+
+
 retfound_model = None
 cnn_model = None
+gradenet_model = None
 _models_ready = False
 _retfound_init_done = False
+_gradenet_init_done = False
 _cnn_load_error: str | None = None
 _retfound_load_error: str | None = None
+_gradenet_load_error: str | None = None
 
 
 def _load_retfound_only():
@@ -134,6 +155,24 @@ def _load_cnn_only():
             _models_ready = True
 
 
+def _load_gradenet_only():
+    global gradenet_model, _gradenet_init_done, _gradenet_load_error
+    _gradenet_load_error = None
+    try:
+        from gradenet import GradeNetV4
+
+        gradenet_model = GradeNetV4()
+        gradenet_model.load()
+        print("✅ GradeNet v4 loaded!", flush=True)
+    except Exception as e:
+        err = str(e)
+        print(f"❌ Error loading GradeNet v4: {e}", flush=True)
+        gradenet_model = None
+        _gradenet_load_error = err[:800]
+    finally:
+        _gradenet_init_done = True
+
+
 def _schedule_retfound_load():
     """RETFound en paralelo con el CNN (como antes del retraso post-CNN). Opcional: dormir al inicio para Cloud Run."""
     delay = float(os.environ.get("RETFOUND_LOAD_DELAY_SEC", "0"))
@@ -169,22 +208,35 @@ async def health_check():
             return "loading"
         return "unavailable"
 
+    def _gradenet_status() -> str:
+        if gradenet_model:
+            return "available"
+        if not _gradenet_init_done:
+            return "loading"
+        return "unavailable"
+
     return {
         "status": "healthy",
         "service": "RetinaScan AI API",
         "models_ready": _models_ready,
         "retfound_init_done": _retfound_init_done,
+        "gradenet_init_done": _gradenet_init_done,
         "diagnostics": {
             "cnn_load_error": _cnn_load_error,
             "retfound_load_error": _retfound_load_error,
+            "gradenet_load_error": _gradenet_load_error,
             "saved_model_pb_exists": os.path.isfile(
                 os.path.join("model-folder", "64x3-CNN.model", "saved_model.pb")
+            ),
+            "gradenet_keras_exists": os.path.exists(
+                os.environ.get("GRADENET_MODEL_PATH", "backend/best_model.keras")
             ),
         },
         "models": {
             "retfound_quantized_model": _retfound_status(),
             "quantized_checkpoint_exists": os.path.exists("checkpoint-quantized-model.pth"),
             "cnn_model": _cnn_status(),
+            "gradenet_v4": _gradenet_status(),
         },
     }
 
@@ -281,6 +333,40 @@ async def predict_retinopathy_cnn(
         raise HTTPException(status_code=500, detail=f"CNN prediction failed: {str(e)}")
 
 
+@app.post("/predict/gradenet", response_model=GradeNetPredictionResponse)
+async def predict_retinopathy_gradenet(file: UploadFile = File(...)):
+    if not gradenet_model:
+        if not _gradenet_init_done:
+            detail = "GradeNet v4 is still loading, retry shortly"
+        elif _gradenet_load_error:
+            detail = f"GradeNet v4 failed to load: {_gradenet_load_error}"
+        else:
+            detail = "GradeNet v4 model not loaded"
+        raise HTTPException(status_code=503, detail=detail)
+
+    ct = file.content_type or ""
+    if not ct.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+
+        result = gradenet_model.predict(temp_file_path)
+        os.unlink(temp_file_path)
+        result.pop("image_path", None)
+        return GradeNetPredictionResponse(**result)
+    except Exception as e:
+        if "temp_file_path" in locals():
+            try:
+                os.unlink(temp_file_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"GradeNet prediction failed: {str(e)}")
+
+
 @app.get("/models/info")
 async def get_models_info():
     return {
@@ -297,6 +383,14 @@ async def get_models_info():
             "description": "CNN-based DR detection model (>93% accuracy) — SavedModel format",
             "endpoint": "/predict/cnn",
             "model_loaded": getattr(cnn_model, 'model_loaded', False) if cnn_model else False
+        },
+        "gradenet_v4": {
+            "name": "GradeNet v4 (EfficientNet + TTA + thresholds)",
+            "status": "available" if gradenet_model else "unavailable",
+            "description": "EfficientNet-based DR grading with retina crop + enhancement + TTA (flip) and calibrated thresholds",
+            "endpoint": "/predict/gradenet",
+            "model_loaded": bool(gradenet_model),
+            "model_path": os.environ.get("GRADENET_MODEL_PATH", "backend/best_model.keras"),
         }
     }
 

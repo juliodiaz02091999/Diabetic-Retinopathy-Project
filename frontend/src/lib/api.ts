@@ -129,6 +129,26 @@ export const predictionAPI = {
     throw lastError;
   },
 
+  predictGradeNet: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return mlApi.post('/predict/gradenet', formData);
+  },
+
+  predictGradeNetWithWarmup: async (file: File) => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < ML_WARMUP_MAX_ATTEMPTS; attempt++) {
+      try {
+        return await predictionAPI.predictGradeNet(file);
+      } catch (e) {
+        lastError = e;
+        if (!isMlWarmup503(e) || attempt === ML_WARMUP_MAX_ATTEMPTS - 1) throw e;
+        await sleep(ML_WARMUP_DELAY_MS);
+      }
+    }
+    throw lastError;
+  },
+
   preprocessPreview: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

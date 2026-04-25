@@ -30,6 +30,15 @@ RUN if [ ! -f "checkpoint-quantized-model.pth" ]; then \
     echo "Quantized model checkpoint downloaded successfully"; \
     fi
 
+# GradeNet v4 (.keras) desde Google Drive (evita commitear archivos >100MB)
+RUN if [ ! -f "backend/best_model.keras" ]; then \
+    echo "Downloading GradeNet .keras from Google Drive using gdown..." && \
+    mkdir -p backend && \
+    ( gdown "https://drive.google.com/uc?id=1axSWwVptlXErAWxbS1uigH99XGswHDm7" -O backend/best_model.keras \
+      || gdown --fuzzy "https://drive.google.com/file/d/1axSWwVptlXErAWxbS1uigH99XGswHDm7/view?usp=sharing" -O backend/best_model.keras ) && \
+    echo "GradeNet .keras downloaded successfully"; \
+    fi
+
 RUN mkdir -p /app/diabetic_retinopathy_dataset
 
 EXPOSE 8000

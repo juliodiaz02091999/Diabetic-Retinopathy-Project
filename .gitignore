@@ -196,3 +196,6 @@ medical_data.db
 *.pickle
 *.pth
 checkpoint-best.pth
+
+# Large Keras models (downloaded in Dockerfile via gdown)
+backend/best_model.keras
