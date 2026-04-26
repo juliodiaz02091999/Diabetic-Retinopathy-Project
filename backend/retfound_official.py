@@ -231,90 +231,60 @@ class RETFoundOfficial:
         Realizar predicción usando RETFound OFICIAL
         """
         try:
-            # Preprocesar imagen
             input_tensor = self.preprocess_image(image)
-            
-            # Realizar predicción
+
             with torch.no_grad():
                 outputs = self.model(input_tensor)
-                
-                # Aplicar softmax para obtener probabilidades
-                probabilities = torch.softmax(outputs, dim=1)
-                
-                # Obtener predicción detallada
-                predicted_class = int(torch.argmax(probabilities, dim=1).item())
-                
-                # Mapear clase a etiqueta (5 clases: 0=No DR, 1=Mild, 2=Moderate, 3=Severe, 4=Proliferative)
-                class_names = ["No DR", "Mild DR", "Moderate DR", "Severe DR", "Proliferative DR"]
-                prediction_class_detailed = class_names[predicted_class]
-                
-                # Obtener probabilidades específicas
-                prob_no_dr = float(probabilities[0][0].item())  # Clase 0: No DR
-                prob_dr = float(torch.sum(probabilities[0][1:]).item())  # Suma de clases 1-4: DR
-                
-                # INTERPRETACIÓN 1: Clase individual más probable (argmax)
-                individual_prediction = prediction_class_detailed
-                individual_confidence = float(torch.max(probabilities[0]).item()) * 100
-                
-                # INTERPRETACIÓN 2: Screening binario (suma para DR vs No-DR)
-                if prob_no_dr > prob_dr:  # Comparar probabilidades No_DR vs suma de DR
-                    binary_prediction = "No_DR"
-                    binary_diagnosis = "Negative for Diabetic Retinopathy"
-                    binary_confidence = prob_no_dr * 100  # Confianza en No DR
-                else:
-                    binary_prediction = "DR"
-                    binary_diagnosis = f"Positive for Diabetic Retinopathy - Requires evaluation"
-                    binary_confidence = prob_dr * 100  # Confianza en DR (suma de todas las etapas)
-                
-                # Para compatibilidad con el sistema actual, mantener interpretación binaria como principal
-                prediction_class = binary_prediction
-                diagnosis = binary_diagnosis
-                final_confidence = binary_confidence
-                
-                return {
-                    # Interpretación principal (binaria para screening)
-                    'prediction_class': prediction_class,
-                    'confidence_score': final_confidence,
-                    'diagnosis': diagnosis,
-                    'probabilities': {
-                        'No_DR': prob_no_dr * 100,
-                        'DR': prob_dr * 100
-                    },
-                    
-                    # Interpretación detallada (clase individual más probable)
-                    'individual_prediction': individual_prediction,
-                    'individual_confidence': individual_confidence,
-                    'individual_diagnosis': f"Most likely stage: {individual_prediction}",
-                    
-                    # Interpretación binaria explícita
-                    'binary_prediction': binary_prediction,
-                    'binary_confidence': binary_confidence,
-                    'binary_diagnosis': binary_diagnosis,
-                    
-                    # Recomendación clínica basada en ambas interpretaciones
-                    'clinical_recommendation': self._get_clinical_recommendation(
-                        individual_prediction, individual_confidence, 
-                        binary_prediction, binary_confidence
-                    ),
-                    
-                    # Información detallada (compatibilidad)
-                    'detailed_class': prediction_class_detailed,
-                    'detailed_probabilities': {
-                        class_names[i]: float(probabilities[0][i].item()) * 100 
-                        for i in range(len(class_names))
-                    },
-                    'model_used': "RETFound_OFFICIAL_Nature2023",
-                    'checkpoint_loaded': os.path.exists(self.checkpoint_path),
-                    'raw_outputs': outputs.cpu().numpy().tolist()
-                }
+                probabilities = torch.softmax(outputs, dim=1)[0]  # shape (5,)
+
+            probs_np = probabilities.cpu().numpy()
+            class_names = ["No DR", "Mild DR", "Moderate DR", "Severe DR", "Proliferative DR"]
+
+            # Clase con mayor probabilidad
+            predicted_class = int(np.argmax(probs_np))
+            prediction_label = class_names[predicted_class]
+            confidence = float(probs_np[predicted_class]) * 100
+
+            prob_dict = {class_names[i]: float(probs_np[i]) * 100 for i in range(5)}
+
+            # Binario derivado para compatibilidad
+            binary_prediction = "No_DR" if predicted_class == 0 else "DR"
+            binary_confidence = float(probs_np[0]) * 100 if predicted_class == 0 else float(1 - probs_np[0]) * 100
+            binary_diagnosis = (
+                "Negative for Diabetic Retinopathy"
+                if predicted_class == 0
+                else "Positive for Diabetic Retinopathy - Requires evaluation"
+            )
+
+            return {
+                'prediction_class': prediction_label,
+                'confidence_score': confidence,
+                'diagnosis': f"RETFound grade: {prediction_label}",
+                'probabilities': prob_dict,
+                'individual_prediction': prediction_label,
+                'individual_confidence': confidence,
+                'individual_diagnosis': f"Most likely stage: {prediction_label}",
+                'binary_prediction': binary_prediction,
+                'binary_confidence': binary_confidence,
+                'binary_diagnosis': binary_diagnosis,
+                'clinical_recommendation': self._get_clinical_recommendation(
+                    prediction_label, confidence, binary_prediction, binary_confidence
+                ),
+                'detailed_class': prediction_label,
+                'detailed_probabilities': prob_dict,
+                'model_used': "RETFound_OFFICIAL_Nature2023",
+                'checkpoint_loaded': os.path.exists(self.checkpoint_path),
+                'raw_outputs': outputs.cpu().numpy().tolist()
+            }
         except Exception as e:
             print(f"❌ Error en predicción: {e}")
             msg = f'Error en predicción: {str(e)}'
+            class_names = ["No DR", "Mild DR", "Moderate DR", "Severe DR", "Proliferative DR"]
             return {
                 'prediction_class': 'Error',
                 'confidence_score': 0.0,
                 'diagnosis': msg,
-                'probabilities': {'No_DR': 0.0, 'DR': 0.0},
+                'probabilities': {n: 0.0 for n in class_names},
                 'individual_prediction': 'Error',
                 'individual_confidence': 0.0,
                 'individual_diagnosis': msg,
