@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { predictionAPI, getMlErrorDetail } from '@/lib/api';
-import { supabasePredictionAPI } from '@/lib/supabaseApi';
+import { supabasePredictionAPI, supabasePatientAPI } from '@/lib/supabaseApi';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   Eye, Upload, FileText, AlertTriangle, CheckCircle, Loader2,
@@ -77,6 +77,8 @@ const Dashboard = () => {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const preprocessedBlobRef = useRef<string | null>(null);
 
@@ -101,6 +103,15 @@ const Dashboard = () => {
     },
     []
   );
+
+  useEffect(() => {
+    supabasePatientAPI.getMyPatient()
+      .then((data) => {
+        setPatients(data);
+        if (data.length === 1) setSelectedPatientId(data[0].id);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchPreprocessedPreview = async (file: File) => {
     setIsFetchingPreview(true);
@@ -157,14 +168,19 @@ const Dashboard = () => {
 
     // Guardar en Supabase no debe bloquear el spinner: si save() cuelga, antes parecía “carga infinita”.
     if (mlResult) {
-      void supabasePredictionAPI
-        .save({
-          prediction_class: mlResult.prediction_class,
-          confidence_score: mlResult.confidence_score,
-          model_used: mlResult.model_used,
-        })
-        .then(() => setSaveMessage('Prediction saved to patient history'))
-        .catch(() => setSaveMessage('Create a patient profile to save predictions'));
+      if (!selectedPatientId) {
+        setSaveMessage('Select a patient to save this prediction');
+      } else {
+        void supabasePredictionAPI
+          .save({
+            patient_id: selectedPatientId,
+            prediction_class: mlResult.prediction_class,
+            confidence_score: mlResult.confidence_score,
+            model_used: mlResult.model_used,
+          })
+          .then(() => setSaveMessage('Prediction saved to patient history'))
+          .catch(() => setSaveMessage('Failed to save prediction'));
+      }
     }
   };
 
@@ -330,6 +346,31 @@ const Dashboard = () => {
 
             <div className="p-6 space-y-5">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+
+              {/* Patient selector */}
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-medium text-muted-foreground shrink-0">Patient</label>
+                {patients.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/patient-profile')}
+                    className="text-xs text-blue-500 dark:text-blue-400 underline underline-offset-2 hover:opacity-70 transition-opacity"
+                  >
+                    Create a patient profile first →
+                  </button>
+                ) : (
+                  <select
+                    value={selectedPatientId}
+                    onChange={(e) => setSelectedPatientId(e.target.value)}
+                    className="field-input h-9 text-sm flex-1"
+                  >
+                    {patients.length > 1 && <option value="">Select patient...</option>}
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
               {/* Drop zone */}
               <div

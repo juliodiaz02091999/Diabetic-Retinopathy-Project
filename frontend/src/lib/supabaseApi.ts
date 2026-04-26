@@ -95,7 +95,7 @@ export const supabasePatientAPI = {
     return data
   },
 
-  // Obtener paciente del usuario actual
+  // Obtener todos los pacientes del usuario actual
   getMyPatient: async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Usuario no autenticado')
@@ -104,10 +104,10 @@ export const supabasePatientAPI = {
       .from('patients')
       .select('*')
       .eq('user_id', user.id)
-      .single()
+      .order('created_at', { ascending: false })
 
-    if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows returned
-    return data
+    if (error) throw error
+    return data ?? []
   },
 
   // Actualizar paciente
@@ -131,6 +131,7 @@ export const supabasePatientAPI = {
 export const supabasePredictionAPI = {
   // Guardar predicción
   save: async (predictionData: {
+    patient_id: string
     prediction_class: string
     confidence_score: number
     model_used?: string
@@ -138,22 +139,13 @@ export const supabasePredictionAPI = {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Usuario no autenticado')
 
-    // Obtener el paciente del usuario
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!patient) throw new Error('Paciente no encontrado')
-
     const { data, error } = await supabase
       .from('predictions')
       .insert({
-        patient_id: patient.id,
+        patient_id: predictionData.patient_id,
         prediction_date: new Date().toISOString(),
         prediction_class: predictionData.prediction_class,
-        confidence_score: predictionData.confidence_score,
+        confidence_score: predictionData.confidence_score / 100, // schema stores 0-1
         model_used: predictionData.model_used || 'Current Model'
       })
       .select()
