@@ -23,7 +23,8 @@ const PatientProfile = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({ name: '', age: '', gender: 'Male', contact_info: '' });
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ name: '', age: '', gender: 'M', contact_info: '' });
 
   useEffect(() => { loadPatientData(); }, []);
 
@@ -46,6 +47,7 @@ const PatientProfile = () => {
   const handleSavePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setSaveError(null);
     try {
       await supabasePatientAPI.create({
         name: formData.name,
@@ -55,9 +57,10 @@ const PatientProfile = () => {
       });
       await loadPatientData();
       setShowAddForm(false);
-      setFormData({ name: '', age: '', gender: 'Male', contact_info: '' });
-    } catch (error) {
+      setFormData({ name: '', age: '', gender: 'M', contact_info: '' });
+    } catch (error: any) {
       console.error('Failed to save patient:', error);
+      setSaveError(error?.message ?? 'Failed to save patient. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -190,8 +193,9 @@ const PatientProfile = () => {
                         <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
                       <SelectContent className="bg-card border-border text-foreground">
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="M">Male</SelectItem>
+                        <SelectItem value="F">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -200,6 +204,9 @@ const PatientProfile = () => {
                     <input value={formData.contact_info} onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })} placeholder="Phone or email" className="field-input" />
                   </div>
                 </div>
+                {saveError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+                )}
                 <div className="flex gap-3 pt-1">
                   <button type="submit" disabled={saving} className="btn-primary h-9 px-4">
                     {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <><CheckCircle className="h-4 w-4" />Save Patient</>}
