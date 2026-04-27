@@ -87,32 +87,34 @@ const PatientProfile = () => {
       {/* Subtle top glow – dark only */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[200px] opacity-0 dark:opacity-100 bg-blue-600/[0.04] rounded-full blur-[120px] pointer-events-none transition-opacity duration-500" />
 
-      <div className="max-w-5xl mx-auto px-8 py-8 relative z-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8 relative z-10">
         {/* Header row */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 mb-6 sm:mb-8">
+          <div className="min-w-0">
             <button
               onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5 group"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 sm:mb-5 group"
             >
-              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+              <ArrowLeft className="h-4 w-4 shrink-0 group-hover:-translate-x-0.5 transition-transform" />
               Back to Dashboard
             </button>
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-2xl surface flex items-center justify-center">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl surface flex items-center justify-center shrink-0">
                 <User className="h-5 w-5 text-foreground" />
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-foreground tracking-tight">Patient Profile</h1>
-                <p className="text-sm text-muted-foreground">Manage patient information and prediction history</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">Patient Profile</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">Manage patient information and prediction history</p>
               </div>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="self-start sm:self-start shrink-0">
+            <ThemeToggle />
+          </div>
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 gap-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5">
           <div className="surface p-5 text-center">
             <div className="w-10 h-10 rounded-xl mx-auto mb-3 flex items-center justify-center
               bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20">
@@ -144,16 +146,16 @@ const PatientProfile = () => {
                   <User className="h-4 w-4 text-muted-foreground" />
                   <p className="text-sm font-semibold text-foreground">Patient Information</p>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   {[
                     { label: 'Name', value: p.name },
                     { label: 'Age', value: `${p.age} years` },
                     { label: 'Gender', value: GENDER_LABEL[p.gender] ?? p.gender },
                     { label: 'Contact', value: p.contact_info || '—' },
                   ].map(({ label, value }) => (
-                    <div key={label}>
+                    <div key={label} className="min-w-0">
                       <p className="field-label mb-1">{label}</p>
-                      <p className="text-base font-semibold text-foreground">{value}</p>
+                      <p className="text-sm sm:text-base font-semibold text-foreground break-words">{value}</p>
                     </div>
                   ))}
                 </div>
@@ -163,7 +165,7 @@ const PatientProfile = () => {
         )}
 
         {/* Add patient */}
-        <div className="surface p-6 mb-5">
+        <div className="surface p-4 sm:p-6 mb-5">
           {patients.length === 0 && (
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center
@@ -232,13 +234,13 @@ const PatientProfile = () => {
           const patientPreds = predictions.filter((pred) => pred.patient_id === p.id);
           return (
             <div key={p.id} className="surface overflow-hidden mb-4">
-              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg surface flex items-center justify-center">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg surface flex items-center justify-center shrink-0">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Prediction History · {p.name}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground break-words">Prediction History · {p.name}</p>
                     <p className="text-xs text-muted-foreground">{patientPreds.length} prediction(s)</p>
                   </div>
                 </div>
@@ -250,8 +252,8 @@ const PatientProfile = () => {
                     {patientPreds.map((pred, idx) => {
                       const noDR = pred.prediction_class === 'No DR';
                       return (
-                        <div key={idx} className="flex items-center justify-between px-4 py-4 rounded-xl surface-lift cursor-default group">
-                          <div className="flex items-center gap-4">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 sm:px-4 py-4 rounded-xl surface-lift cursor-default group">
+                          <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                               noDR
                                 ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'
@@ -259,21 +261,21 @@ const PatientProfile = () => {
                             }`}>
                               <Eye className={`h-4 w-4 ${noDR ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`} />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <span className={noDR ? 'badge-no-dr' : 'badge-dr'}>{pred.prediction_class}</span>
-                                <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                                <div className="flex items-center gap-1 text-muted-foreground text-xs shrink-0">
                                   <Clock className="h-3 w-3" />
                                   {new Date(pred.prediction_date).toLocaleDateString()}
                                 </div>
                               </div>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-muted-foreground break-words">
                                 {pred.model_used && <span className="mr-2">{pred.model_used} ·</span>}
                                 Confidence: <span className="text-foreground font-semibold">{(pred.confidence_score * 100).toFixed(1)}%</span>
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-left sm:text-right sm:shrink-0 border-t border-border/60 sm:border-0 pt-2 sm:pt-0 w-full sm:w-auto">
                             <p className="text-xl font-bold text-foreground">{(pred.confidence_score * 100).toFixed(1)}%</p>
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Confidence</p>
                           </div>

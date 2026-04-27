@@ -7,7 +7,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   Eye, Upload, FileText, AlertTriangle, CheckCircle, Loader2,
   LogOut, UserPlus, Info, Zap, Target, Microscope,
-  Activity, TrendingUp, Sparkles, Shield, X, Brain
+  Activity, TrendingUp, Sparkles, Shield, X, Brain, Menu
 } from 'lucide-react';
 
 type ModelType = 'retfound' | 'cnn' | 'gradenet';
@@ -79,6 +79,7 @@ const Dashboard = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [navOpen, setNavOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const preprocessedBlobRef = useRef<string | null>(null);
 
@@ -196,20 +197,57 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="md:hidden fixed inset-0 z-30 bg-background/70 backdrop-blur-sm"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
 
-      {/* ── Sidebar ── */}
-      <aside className="w-64 sidebar flex flex-col fixed left-0 top-0 h-full z-40">
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between gap-3 px-4 border-b border-border bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg surface flex items-center justify-center shrink-0">
+            <Eye className="h-4 w-4 text-foreground" />
+          </div>
+          <p className="text-sm font-semibold text-foreground truncate">RetinaScan AI</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setNavOpen((o) => !o)}
+          className="w-10 h-10 rounded-lg border border-border flex items-center justify-center shrink-0 hover:bg-muted/80 transition-colors"
+          aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+        >
+          {navOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </header>
+
+      {/* ── Sidebar (drawer on small screens) ── */}
+      <aside
+        className={`w-64 sidebar flex flex-col fixed left-0 top-0 h-full z-50 transition-transform duration-200 ease-out md:translate-x-0 ${
+          navOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         {/* Brand */}
-        <div className="px-5 py-5 border-b border-border">
-          <div className="flex items-center gap-3">
+        <div className="px-5 py-5 border-b border-border flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl surface flex items-center justify-center shrink-0">
               <Eye className="h-4 w-4 text-foreground" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground leading-tight">RetinaScan AI</p>
               <p className="text-[11px] text-muted-foreground leading-tight">Professional Platform</p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setNavOpen(false)}
+            className="md:hidden w-9 h-9 rounded-lg hover:bg-muted dark:hover:bg-white/[0.07] flex items-center justify-center shrink-0 -mr-1"
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
         </div>
 
         {/* User */}
@@ -235,7 +273,13 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <button onClick={() => navigate('/patient-profile')} className="nav-item group">
+          <button
+            onClick={() => {
+              navigate('/patient-profile');
+              setNavOpen(false);
+            }}
+            className="nav-item group"
+          >
             <UserPlus className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
             <div>
               <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Patient Profile</p>
@@ -258,7 +302,10 @@ const Dashboard = () => {
             <ThemeToggle labeled className="w-full justify-center" />
           </div>
           <button
-            onClick={logout}
+            onClick={() => {
+              setNavOpen(false);
+              logout();
+            }}
             className="nav-item group text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
           >
             <LogOut className="h-4 w-4 shrink-0 transition-colors" />
@@ -268,18 +315,22 @@ const Dashboard = () => {
       </aside>
 
       {/* ── Main ── */}
-      <main className={`flex-1 ml-64 transition-all duration-500 ease-out ${prediction ? 'mr-[26rem]' : 'mr-0'}`}>
-        <div className="p-8 max-w-3xl mx-auto">
+      <main
+        className={`flex-1 w-full min-w-0 md:ml-64 pt-14 md:pt-0 transition-all duration-500 ease-out ${
+          prediction ? 'md:mr-[26rem] mr-0' : 'mr-0'
+        }`}
+      >
+        <div className="p-4 sm:p-6 md:p-8 max-w-3xl mx-auto w-full">
           {/* Welcome */}
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground tracking-[0.08em] uppercase mb-1">
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-lg sm:text-2xl font-bold text-foreground tracking-[0.06em] sm:tracking-[0.08em] uppercase mb-1 break-words">
               {user?.username}
             </h2>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Ready to analyze retinal images with advanced AI</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] sm:tracking-[0.2em] text-muted-foreground leading-relaxed">Ready to analyze retinal images with advanced AI</p>
           </div>
 
           {/* Stat pills */}
-          <div className="flex items-center gap-3 mb-8 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 flex-wrap">
             {[
               { icon: Activity,   label: '93%+ Accuracy',  color: 'text-blue-500 dark:text-blue-400' },
               { icon: Sparkles,   label: '2 AI Models',    color: 'text-purple-500 dark:text-purple-400' },
@@ -296,23 +347,25 @@ const Dashboard = () => {
           {/* Upload card */}
           <div className="surface-lift overflow-hidden">
             {/* Model selector tabs */}
-            <div className="px-6 pt-5 pb-0 border-b border-border">
-              <div className="flex items-center gap-4 mb-0">
-                <div className="w-9 h-9 rounded-xl surface flex items-center justify-center shrink-0">
-                  <Upload className="h-4 w-4 text-foreground" />
+            <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-0 border-b border-border">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 mb-0">
+                <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+                  <div className="w-9 h-9 rounded-xl surface flex items-center justify-center shrink-0">
+                    <Upload className="h-4 w-4 text-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-foreground">AI Retinal Analysis</h3>
+                    <p className="text-xs text-muted-foreground">Select a model and upload a retinal image</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-foreground">AI Retinal Analysis</h3>
-                  <p className="text-xs text-muted-foreground">Select a model and upload a retinal image</p>
-                </div>
-                <div className="pill">
-                  <Zap className="h-3 w-3 text-blue-500 dark:text-blue-400" />
-                  {activeModel.pill}
+                <div className="pill self-start sm:self-center max-w-full overflow-hidden text-ellipsis">
+                  <Zap className="h-3 w-3 shrink-0 text-blue-500 dark:text-blue-400" />
+                  <span className="truncate">{activeModel.pill}</span>
                 </div>
               </div>
 
-              {/* Tabs */}
-              <div className="flex gap-1 mt-4 -mb-px">
+              {/* Tabs – horizontal scroll on narrow screens */}
+              <div className="flex gap-0.5 sm:gap-1 mt-4 -mb-px overflow-x-auto pb-px -mx-1 px-1 [scrollbar-width:thin]">
                 {MODELS.map((m) => {
                   const Icon = m.icon;
                   const active = selectedModel === m.id;
@@ -330,13 +383,13 @@ const Dashboard = () => {
                           releasePreprocessedBlob();
                         }
                       }}
-                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all duration-150 rounded-t-lg ${
+                      className={`flex shrink-0 items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 text-[11px] sm:text-xs font-semibold border-b-2 transition-all duration-150 rounded-t-lg whitespace-nowrap ${
                         active
                           ? 'border-foreground text-foreground bg-muted/30'
                           : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                       }`}
                     >
-                      <Icon className="h-3.5 w-3.5" />
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
                       {m.label}
                     </button>
                   );
@@ -344,11 +397,11 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-4 sm:p-6 space-y-5">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
 
               {/* Patient selector */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                 <label className="text-xs font-medium text-muted-foreground shrink-0">Patient</label>
                 {patients.length === 0 ? (
                   <button
@@ -382,7 +435,7 @@ const Dashboard = () => {
                   const file = e.dataTransfer.files?.[0];
                   if (file) processFile(file);
                 }}
-                className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 ${
+                className={`border-2 border-dashed rounded-xl p-6 sm:p-8 md:p-10 text-center cursor-pointer transition-all duration-200 ${
                   isDragOver
                     ? 'border-foreground/30 bg-muted/60 scale-[1.01]'
                     : 'border-border hover:border-foreground/20 hover:bg-muted/30'
@@ -391,24 +444,24 @@ const Dashboard = () => {
                 {preview ? (
                   <div className="space-y-4">
                     {preprocessedPreview || isFetchingPreview ? (
-                      <div className="flex items-start justify-center gap-6">
-                        <div className="flex flex-col items-center gap-2">
-                          <img src={preview} alt="Original" className="h-44 w-44 object-cover rounded-xl shadow ring-1 ring-border" />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-center gap-4 sm:gap-6 max-w-md sm:max-w-none mx-auto">
+                        <div className="flex flex-col items-center gap-2 w-full sm:w-auto">
+                          <img src={preview} alt="Original" className="h-40 w-40 sm:h-44 sm:w-44 object-cover rounded-xl shadow ring-1 ring-border mx-auto" />
                           <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Original</span>
                         </div>
-                        <div className="flex flex-col items-center gap-2">
+                        <div className="flex flex-col items-center gap-2 w-full sm:w-auto">
                           {isFetchingPreview ? (
-                            <div className="h-44 w-44 rounded-xl surface flex items-center justify-center ring-1 ring-border">
+                            <div className="h-40 w-40 sm:h-44 sm:w-44 rounded-xl surface flex items-center justify-center ring-1 ring-border mx-auto">
                               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                             </div>
                           ) : (
-                            <img src={preprocessedPreview!} alt="Preprocessed" className="h-44 w-44 object-cover rounded-xl shadow ring-1 ring-border" />
+                            <img src={preprocessedPreview!} alt="Preprocessed" className="h-40 w-40 sm:h-44 sm:w-44 object-cover rounded-xl shadow ring-1 ring-border mx-auto" />
                           )}
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Gaussian filtered · 224×224</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground text-center">Gaussian filtered · 224×224</span>
                         </div>
                       </div>
                     ) : (
-                      <img src={preview} alt="Preview" className="max-h-56 mx-auto rounded-xl shadow-lg ring-1 ring-border" />
+                      <img src={preview} alt="Preview" className="max-h-48 sm:max-h-56 w-full max-w-xs mx-auto object-contain rounded-xl shadow-lg ring-1 ring-border" />
                     )}
                     <p className="text-xs text-muted-foreground font-medium">{selectedFile?.name}</p>
                   </div>
@@ -452,11 +505,13 @@ const Dashboard = () => {
       </main>
 
       {/* ── Results Panel ── */}
-      <aside className={`fixed right-0 top-0 h-full w-[26rem] sidebar flex flex-col z-50 transform transition-transform duration-500 ease-out ${
-        prediction ? 'translate-x-0' : 'translate-x-full'
-      }`}>
-        {/* Header */}
-        <div className="px-5 py-5 border-b border-border flex items-center justify-between shrink-0">
+      <aside
+        className={`fixed right-0 top-0 h-full w-full max-w-md md:max-w-none md:w-[26rem] sidebar flex flex-col z-[60] transform transition-transform duration-500 ease-out ${
+          prediction ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Header – extra top padding on notched phones */}
+        <div className="px-4 sm:px-5 border-b border-border flex items-center justify-between shrink-0 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:pb-5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg surface flex items-center justify-center">
               <FileText className="h-4 w-4 text-foreground" />
@@ -475,7 +530,7 @@ const Dashboard = () => {
         </div>
 
         {/* Scrollable */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {prediction && (
             <>
               {/* Main diagnosis */}
@@ -524,7 +579,7 @@ const Dashboard = () => {
                       <Microscope className="h-4 w-4 text-muted-foreground" />
                       <p className="text-sm font-semibold text-foreground">Clinical Analysis</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {[
                         { value: `${prediction.individual_confidence.toFixed(1)}%`, label: 'Individual', badge: prediction.individual_prediction },
                         { value: `${prediction.binary_confidence.toFixed(1)}%`, label: 'Screening', badge: prediction.binary_prediction },

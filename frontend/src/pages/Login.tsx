@@ -110,7 +110,7 @@ const Login = () => {
         </div>
 
         {/* Feature pills */}
-        <div className="flex items-center justify-center gap-3 mt-5">
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-5 px-1">
           {[
             { icon: Zap, label: 'AI-Powered' },
             { icon: Shield, label: 'HIPAA' },
