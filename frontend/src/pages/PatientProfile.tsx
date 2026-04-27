@@ -5,8 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { supabasePatientAPI, supabasePredictionAPI } from '@/lib/supabaseApi';
 import {
-  User, UserPlus, Calendar, Download, AlertCircle, CheckCircle,
-  Loader2, ArrowLeft, Eye, Activity, FileText, Clock, BarChart3, TrendingUp
+  User, UserPlus, Calendar, AlertCircle, CheckCircle,
+  Loader2, ArrowLeft, Eye, Activity, FileText, Clock, TrendingUp
 } from 'lucide-react';
 
 interface Patient { id: string; name: string; age: number; gender: string; contact_info: string; }
